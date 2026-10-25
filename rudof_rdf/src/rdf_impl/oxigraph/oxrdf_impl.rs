@@ -6,33 +6,35 @@ use crate::rdf_core::{
     },
 };
 use oxrdf::{
-    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, NamedOrBlankNode as OxSubject,
-    NamedOrBlankNodeRef as OxSubjectRef, Term as OxTerm, Triple as OxTriple,
+    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, Subject as OxSubject,
+    SubjectRef as OxSubjectRef, Term as OxTerm, Triple as OxTriple,
 };
 use prefixmap::IriRef;
 use rudof_iri::IriS;
 
 /// Implements the `Subject` trait for `OxSubject` (owned version).
 ///
-/// This allows owned `NamedOrBlankNode` instances from `oxrdf` to be used
-/// as RDF subjects in the core trait system.
+/// This allows owned `Subject` instances from `oxrdf` (an IRI, a blank node or,
+/// in rdf-array, a sequence) to be used as RDF subjects in the core trait system.
 impl Subject for OxSubject {
     /// Returns the kind of term this subject represents.
     ///
     /// # Returns
     /// - `TermKind::Iri` for named nodes (IRIs)
     /// - `TermKind::BlankNode` for blank nodes
+    /// - `TermKind::Sequence` for sequences
     fn kind(&self) -> TermKind {
         match self {
             OxSubject::NamedNode(_) => TermKind::Iri,
             OxSubject::BlankNode(_) => TermKind::BlankNode,
+            OxSubject::Sequence(_) => TermKind::Sequence,
         }
     }
 }
 
 /// Implements the `Subject` trait for `OxSubjectRef` (borrowed version).
 ///
-/// This allows borrowed `NamedOrBlankNodeRef` instances from `oxrdf` to be
+/// This allows borrowed `SubjectRef` instances from `oxrdf` to be
 /// used as RDF subjects without requiring ownership.
 impl Subject for OxSubjectRef<'_> {
     /// Returns the kind of term this subject reference represents.
@@ -40,10 +42,12 @@ impl Subject for OxSubjectRef<'_> {
     /// # Returns
     /// - `TermKind::Iri` for named nodes (IRIs)
     /// - `TermKind::BlankNode` for blank nodes
+    /// - `TermKind::Sequence` for sequences
     fn kind(&self) -> TermKind {
         match self {
             OxSubjectRef::NamedNode(_) => TermKind::Iri,
             OxSubjectRef::BlankNode(_) => TermKind::BlankNode,
+            OxSubjectRef::Sequence(_) => TermKind::Sequence,
         }
     }
 }
@@ -71,12 +75,14 @@ impl Term for OxTerm {
     /// - `TermKind::BlankNode` for blank nodes
     /// - `TermKind::Literal` for literal values
     /// - `TermKind::Triple` for RDF-star quoted triples
+    /// - `TermKind::Sequence` for rdf-array sequences
     fn kind(&self) -> TermKind {
         match self {
             OxTerm::NamedNode(_) => TermKind::Iri,
             OxTerm::BlankNode(_) => TermKind::BlankNode,
             OxTerm::Literal(_) => TermKind::Literal,
             OxTerm::Triple(_) => TermKind::Triple,
+            OxTerm::Sequence(_) => TermKind::Sequence,
         }
     }
 
@@ -92,7 +98,19 @@ impl Term for OxTerm {
             OxTerm::BlankNode(bnode) => bnode.as_str().to_string(),
             OxTerm::Literal(literal) => literal.value().to_string(),
             OxTerm::Triple(triple) => triple.to_string(),
+            OxTerm::Sequence(seq) => seq.to_string(),
         }
+    }
+
+    fn sequence_elements(&self) -> Option<Vec<Self>> {
+        match self {
+            OxTerm::Sequence(seq) => Some(seq.elements().to_vec()),
+            _ => None,
+        }
+    }
+
+    fn sequence(elements: Vec<Self>) -> Self {
+        OxTerm::Sequence(oxrdf::Sequence::new(elements))
     }
 }
 

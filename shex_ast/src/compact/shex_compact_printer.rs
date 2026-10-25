@@ -340,6 +340,12 @@ where
             ShapeExpr::Shape(s) => self.pp_shape(s),
             ShapeExpr::NodeConstraint(nc) => self.pp_node_constraint(nc),
             ShapeExpr::External => self.pp_external(),
+            ShapeExpr::Collection { shape_expr, min, max } => self
+                .doc
+                .text("((")
+                .append(self.pp_shape_expr(&shape_expr.se))
+                .append(self.doc.text("))"))
+                .append(self.doc.text(collection_bounds(*min, *max))),
             ShapeExpr::ShapeAnd { .. } | ShapeExpr::ShapeOr { .. } | ShapeExpr::ShapeNot { .. } => self
                 .doc
                 .text("(")
@@ -1177,6 +1183,22 @@ where
     }
 }
 
+/// rdf-array: the bounds of a Collection shape expression in ShExC: nothing for
+/// the default (any length), `[m]` for exactly m elements, `[m, *]` and `[m, n]`.
+fn collection_bounds(min: Option<i32>, max: Option<i32>) -> String {
+    match (min, max) {
+        (None, None) => String::new(),
+        (min, max) => {
+            let min = min.unwrap_or(0);
+            match max {
+                Some(max) if max == min => format!("[{min}]"),
+                Some(max) if max >= 0 => format!("[{min}, {max}]"),
+                _ => format!("[{min}, *]"),
+            }
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1215,6 +1237,20 @@ mod tests {
         let printed = ShExFormatter::default().without_colors().format_schema(&schema);
         assert!(printed.contains(r#""x"^^"#), "{printed}");
         assert!(printed.contains(r#"" 1"^^"#), "{printed}");
+        let reparsed = ShExParser::parse(&printed, None, &iri!("http://default/")).unwrap();
+        assert_eq!(schema, reparsed);
+    }
+
+    #[test]
+    fn collections_are_printed_and_roundtrip() {
+        use crate::compact::ShExParser;
+        let src = "PREFIX : <http://a.example/>\nPREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n\
+                   :S { :rgb ((xsd:integer))[3] ; :pts ((((xsd:decimal))[2]))[3, *] ; :any ((.)) ; :few ((IRI))[0, 2] }";
+        let schema = ShExParser::parse(src, None, &iri!("http://default/")).unwrap();
+        let printed = ShExFormatter::default().without_colors().format_schema(&schema);
+        assert!(printed.contains("))[3]"), "{printed}");
+        assert!(printed.contains("))[2]))[3, *]"), "{printed}");
+        assert!(printed.contains("))[0, 2]"), "{printed}");
         let reparsed = ShExParser::parse(&printed, None, &iri!("http://default/")).unwrap();
         assert_eq!(schema, reparsed);
     }

@@ -242,14 +242,16 @@ pub(crate) fn term_value(t: &OxTerm) -> String {
         OxTerm::Literal(lit) => lit.value().to_string(),
         OxTerm::BlankNode(bn) => format!("_:{}", bn.as_str()),
         OxTerm::Triple(triple) => format!("<<{triple}>>"),
+        OxTerm::Sequence(seq) => seq.to_string(),
     }
 }
 
 /// Get the string representation of an RDF subject.
-pub(crate) fn subject_str(s: &oxrdf::NamedOrBlankNode) -> String {
+pub(crate) fn subject_str(s: &oxrdf::Subject) -> String {
     match s {
-        oxrdf::NamedOrBlankNode::NamedNode(n) => n.as_str().to_string(),
-        oxrdf::NamedOrBlankNode::BlankNode(bn) => format!("_:{}", bn.as_str()),
+        oxrdf::Subject::NamedNode(n) => n.as_str().to_string(),
+        oxrdf::Subject::BlankNode(bn) => format!("_:{}", bn.as_str()),
+        oxrdf::Subject::Sequence(seq) => seq.to_string(),
     }
 }
 
@@ -260,5 +262,6 @@ pub(crate) fn object_str(o: &OxTerm) -> String {
         OxTerm::Literal(lit) => lit.value().to_string(),
         OxTerm::BlankNode(bn) => format!("_:{}", bn.as_str()),
         OxTerm::Triple(triple) => format!("<<{triple}>>"),
+        OxTerm::Sequence(seq) => seq.to_string(),
     }
 }

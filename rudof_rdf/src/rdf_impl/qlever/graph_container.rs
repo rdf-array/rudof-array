@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use colored::Colorize;
 use oxrdf::{
-    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, NamedOrBlankNode as OxSubject,
-    Term as OxTerm, Triple as OxTriple,
+    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, Subject as OxSubject, Term as OxTerm,
+    Triple as OxTriple,
 };
 use prefixmap::{PrefixMap, PrefixMapError};
 use rudof_iri::IriS;
@@ -234,6 +234,7 @@ impl Rdf for QleverGraphContainer {
         match subj {
             OxSubject::BlankNode(bn) => self.show_blanknode(bn),
             OxSubject::NamedNode(n) => self.qualify_iri(n),
+            OxSubject::Sequence(s) => crate::rdf_core::term::show_ox_sequence(s, |e| self.qualify_term(e)),
         }
     }
 
@@ -242,6 +243,7 @@ impl Rdf for QleverGraphContainer {
             OxTerm::BlankNode(bn) => self.show_blanknode(bn),
             OxTerm::Literal(lit) => self.show_literal(lit),
             OxTerm::NamedNode(n) => self.qualify_iri(n),
+            OxTerm::Sequence(s) => crate::rdf_core::term::show_ox_sequence(s, |e| self.qualify_term(e)),
             OxTerm::Triple(_) => unimplemented!("Triple terms not yet supported"),
         }
     }

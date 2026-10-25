@@ -9,7 +9,7 @@ use crate::{
 };
 use prefixmap::IriRef;
 use rudof_iri::IriS;
-use rudof_rdf::rdf_core::parser::rdf_node_parser::utils::{parse_list_recursive, term_to_iri, term_to_number};
+use rudof_rdf::rdf_core::parser::rdf_node_parser::utils::{parse_sequence, term_to_iri, term_to_number};
 use rudof_rdf::rdf_core::term::literal::Lang;
 use rudof_rdf::rdf_core::vocabs::ShexRVocab;
 use rudof_rdf::rdf_core::{
@@ -110,7 +110,7 @@ fn term_to_shape_label<RDF: FocusRDF>(term: &RDF::Term) -> Result<ShapeExprLabel
         Object::Iri(iri) => Ok(ShapeExprLabel::iri(iri)),
         Object::BlankNode(bnode) => Ok(ShapeExprLabel::bnode(BNode::new(bnode.as_str()))),
         Object::Literal(lit) => Err(ShExRError::ShapeExprLabelLiteral { term: lit.to_string() }),
-        Object::Triple { .. } => Err(ShExRError::TermToRDFNodeFailed { term: term.to_string() }),
+        Object::Triple { .. } | Object::Sequence(_) => Err(ShExRError::TermToRDFNodeFailed { term: term.to_string() }),
     }
 }
 
@@ -183,7 +183,8 @@ where
     }
 }
 
-/// Reads an RDF-list-valued property (`sx:shapes`, `sx:shapeExprs`, ...),
+/// Reads a list-valued property (`sx:shapes`, `sx:shapeExprs`, ...), whose
+/// value is one sequence term in rdf-array,
 /// applying `parse` to each element in turn (with focus moved to it), and
 /// restores the original focus afterwards. `None` if the property is absent.
 fn read_list_property<RDF, T>(
@@ -200,7 +201,7 @@ where
         None => Ok(None),
         Some(head) => {
             rdf.set_focus(&head);
-            let elems = parse_list_recursive::<RDF>(vec![head], rdf)?;
+            let elems = parse_sequence::<RDF>(rdf)?;
             let mut results = Vec::with_capacity(elems.len());
             for elem in elems {
                 rdf.set_focus(&elem);
@@ -320,7 +321,9 @@ fn visit_shape_expr(se: &mut ShapeExpr, f: &mut impl FnMut(&mut TripleExpr) -> b
                 visit_shape_expr(&mut se.se, f);
             }
         },
-        ShapeExpr::ShapeNot { shape_expr } => visit_shape_expr(&mut shape_expr.se, f),
+        ShapeExpr::ShapeNot { shape_expr } | ShapeExpr::Collection { shape_expr, .. } => {
+            visit_shape_expr(&mut shape_expr.se, f)
+        },
         ShapeExpr::Shape(shape) => {
             if let Some(expression) = &mut shape.expression {
                 visit_triple_expr(&mut expression.te, f);
@@ -386,6 +389,22 @@ fn parse_shape_expr<RDF: FocusRDF + 'static>(rdf: &mut RDF) -> Result<ShapeExpr,
         Some(ShexRVocab::SX_NODE_CONSTRAINT) => parse_node_constraint(rdf).map(ShapeExpr::node_constraint),
         Some(ShexRVocab::SX_SHAPE) => parse_shape(rdf).map(ShapeExpr::shape),
         Some(ShexRVocab::SX_SHAPE_EXTERNAL) => Ok(ShapeExpr::external()),
+        Some(ShexRVocab::SX_COLLECTION) => {
+            use rudof_rdf::rdf_core::parser::rdf_node_parser::constructors::SingleIntegerPropertyParser;
+            let inner = read_node_property(rdf, ShexRVocab::sx_shape_expr(), parse_shape_expr)?;
+            rdf.set_focus(&node);
+            let min = SingleIntegerPropertyParser::new(ShexRVocab::sx_min())
+                .optional()
+                .parse_focused(rdf)?
+                .map(|n| n as i32);
+            rdf.set_focus(&node);
+            let max = SingleIntegerPropertyParser::new(ShexRVocab::sx_max())
+                .optional()
+                .parse_focused(rdf)?
+                .map(|n| n as i32);
+            rdf.set_focus(&node);
+            Ok(ShapeExpr::collection(inner, min, max))
+        },
         _ => {
             // Not one of the inline shape-expression constructs (or no
             // `rdf:type` triple at all): this node is a reference to a

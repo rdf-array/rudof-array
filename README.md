@@ -1,3 +1,15 @@
+<img src=".github/rdf-array-logo.png" alt="[rudof]" width="96" align="right">
+
+# rudof-array: rudof for rdf-array
+
+**rdf-array** fork of [rudof](https://github.com/rudof-project/rudof): rudof reads RDF through
+[oxigraph-array](https://github.com/rdf-array/oxigraph-array), so `( 1 2 3 )` in Turtle is one
+sequence term (`oxrdf::Sequence`, rudof's `Object::Sequence`) and `()` the empty sequence. Its ShEx
+engine gains the ShEx-array Collection shape expression `((shapeExpr))[min, max]` in ShExC, ShExJ
+(`{"type": "Collection", …}`) and ShExR (`sx:Collection`), and lists in ShExR schemas and SHACL shapes
+graphs are read and written as sequences. Part of the
+[rdf-array](https://github.com/rdf-array/rdf-array) organisation; notes in doc/rdf-array.md.
+
 # rudof
 
 [![Latest Version](https://img.shields.io/crates/v/rudof-cli.svg)](https://crates.io/crates/rudof-cli)

@@ -27,8 +27,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::debug;
 
 use oxrdf::{
-    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, NamedOrBlankNode as OxSubject,
-    Term as OxTerm, Triple as OxTriple,
+    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, Subject as OxSubject, Term as OxTerm,
+    Triple as OxTriple,
 };
 
 /// Default number of nodes one prefetch query asks about.

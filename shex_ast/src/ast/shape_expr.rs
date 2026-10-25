@@ -56,6 +56,18 @@ pub enum ShapeExpr {
     #[serde(rename = "ShapeExternal")]
     External,
 
+    /// rdf-array: the Collection shape expression `((shapeExpr))[min, max]`,
+    /// which matches a sequence of `min` to `max` elements, each conforming to
+    /// `shapeExpr`. Absent bounds mean 0 and unbounded; `max` is -1 for `*`.
+    Collection {
+        #[serde(rename = "shapeExpr")]
+        shape_expr: Box<ShapeExprWrapper>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<i32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<i32>,
+    },
+
     Ref(ShapeExprLabel),
 }
 
@@ -117,6 +129,15 @@ impl ShapeExpr {
             shape_exprs.push(se.into())
         }
         ShapeExpr::ShapeAnd { shape_exprs }
+    }
+
+    /// rdf-array: the Collection shape expression `((se))[min, max]`.
+    pub fn collection(se: ShapeExpr, min: Option<i32>, max: Option<i32>) -> ShapeExpr {
+        ShapeExpr::Collection {
+            shape_expr: Box::new(ShapeExprWrapper { se }),
+            min,
+            max,
+        }
     }
 
     pub fn node_constraint(nc: NodeConstraint) -> ShapeExpr {
@@ -206,6 +227,11 @@ impl DerefIri for ShapeExpr {
                 let nc = nc.deref_iri(base, prefixmap)?;
                 Ok(ShapeExpr::NodeConstraint(nc))
             },
+            ShapeExpr::Collection { shape_expr, min, max } => Ok(ShapeExpr::Collection {
+                shape_expr: shape_expr.deref_iri(base, prefixmap)?,
+                min,
+                max,
+            }),
         }
     }
 }
@@ -223,5 +249,30 @@ mod tests {
         let se = ShapeExpr::NodeConstraint(nc);
         let json_nc = serde_json::to_string(&se).unwrap();
         assert_eq!(json_nc, "{\"type\":\"NodeConstraint\",\"pattern\":\"o*\"}");
+    }
+
+    #[test]
+    fn test_serde_collection() {
+        let json = r#"{"type":"Collection","shapeExpr":{"type":"NodeConstraint","nodeKind":"iri"},"min":1,"max":-1}"#;
+        let se: ShapeExpr = serde_json::from_str(json).unwrap();
+        assert!(matches!(
+            se,
+            ShapeExpr::Collection {
+                min: Some(1),
+                max: Some(-1),
+                ..
+            }
+        ));
+        assert_eq!(serde_json::to_string(&se).unwrap(), json);
+        let unbounded: ShapeExpr =
+            serde_json::from_str(r#"{"type":"Collection","shapeExpr":"http://a.example/T"}"#).unwrap();
+        assert!(matches!(
+            unbounded,
+            ShapeExpr::Collection {
+                min: None,
+                max: None,
+                ..
+            }
+        ));
     }
 }

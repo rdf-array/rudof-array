@@ -29,6 +29,13 @@ pub enum ShapeExpr {
     Ref {
         idx: ShapeLabelIdx,
     },
+    /// rdf-array: a sequence of `min` to `max` elements (`None`: unbounded),
+    /// each conforming to the shape expression `expr`.
+    Collection {
+        expr: ShapeLabelIdx,
+        min: usize,
+        max: Option<usize>,
+    },
 
     #[default]
     Empty,
@@ -48,6 +55,7 @@ impl ShapeExpr {
             ShapeExpr::Shape(_s) => vec![],
             ShapeExpr::External {} => vec![],
             ShapeExpr::Ref { idx } => vec![*idx],
+            ShapeExpr::Collection { expr, .. } => vec![*expr],
             ShapeExpr::Empty => vec![],
         }
     }
@@ -73,6 +81,7 @@ impl ShapeExpr {
                 let info = schema.find_shape_idx(idx).unwrap();
                 info.expr().get_triple_exprs(schema)
             },
+            ShapeExpr::Collection { .. } => vec![],
             ShapeExpr::Empty => vec![],
         }
     }
@@ -145,6 +154,9 @@ impl ShapeExpr {
                 }
                 map
             },
+            // The elements of a sequence are not neighbours of the node: they are
+            // proved when the collection is checked.
+            ShapeExpr::Collection { .. } => HashMap::new(),
             ShapeExpr::Empty => HashMap::new(),
         }
     }
@@ -186,6 +198,7 @@ impl ShapeExpr {
             },
             ShapeExpr::External {} => {},
             ShapeExpr::Ref { idx } => visit(idx, &mut preds),
+            ShapeExpr::Collection { .. } => {},
             ShapeExpr::Empty => {},
         }
         preds
@@ -243,6 +256,9 @@ impl ShapeExpr {
             ShapeExpr::Ref { idx } => {
                 graph.add_edge(source, *idx, pos_neg);
             },
+            ShapeExpr::Collection { expr, .. } => {
+                graph.add_edge(source, *expr, pos_neg);
+            },
             ShapeExpr::Empty => {},
         }
     }
@@ -294,6 +310,13 @@ impl Display for ShapeExpr {
             ShapeExpr::Shape(shape) => write!(f, "{shape}"),
             ShapeExpr::External {} => write!(f, "External"),
             ShapeExpr::Ref { idx } => write!(f, "@{idx}"),
+            ShapeExpr::Collection { expr, min, max } => {
+                write!(f, "(({expr}))[{min}, ")?;
+                match max {
+                    Some(max) => write!(f, "{max}]"),
+                    None => write!(f, "*]"),
+                }
+            },
             ShapeExpr::Empty => write!(f, "<Empty>"),
         }
     }

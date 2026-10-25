@@ -209,6 +209,9 @@ impl CoShaMoConverter {
                 ShapeExpr::ShapeNot { .. } => Err(ComparatorError::NotImplemented {
                     feature: "ShapeNot as ValueExpr".to_string(),
                 }),
+                ShapeExpr::Collection { .. } => Err(ComparatorError::NotImplemented {
+                    feature: "Collection as ValueExpr".to_string(),
+                }),
                 ShapeExpr::External => Err(ComparatorError::NotImplemented {
                     feature: "External as ValueExpr".to_string(),
                 }),
@@ -235,6 +238,9 @@ impl CoShaMoConverter {
             }),
             ShapeExpr::ShapeNot { shape_expr: _ } => Err(ComparatorError::NotImplemented {
                 feature: "ShapeNot".to_string(),
+            }),
+            ShapeExpr::Collection { .. } => Err(ComparatorError::NotImplemented {
+                feature: "Collection".to_string(),
             }),
             ShapeExpr::NodeConstraint(_) => Err(ComparatorError::NotImplemented {
                 feature: "NodeConstraint".to_string(),

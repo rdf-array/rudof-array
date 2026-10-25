@@ -1,8 +1,7 @@
-use crate::rdf_core::vocabs::RdfVocab;
 use crate::rdf_core::{
     FocusRDF, RDFError,
     parser::rdf_node_parser::{RDFNodeParse, constructors::TypeParser},
-    term::Iri,
+    term::{Iri, Term},
 };
 use rudof_iri::IriS;
 use std::marker::PhantomData;
@@ -125,10 +124,8 @@ where
     fn parse_focused(&self, rdf: &mut RDF) -> Result<Self::Output, RDFError> {
         let focus = rdf.get_focus().ok_or(RDFError::NoFocusNodeError)?;
 
-        let is_nil = match TryInto::<RDF::IRI>::try_into(focus.clone()) {
-            Ok(iri) => iri.as_str() == RdfVocab::RDF_NIL,
-            Err(_) => false,
-        };
+        // rdf-array: the empty list is the empty sequence `()`, not rdf:nil.
+        let is_nil = focus.sequence_elements().is_some_and(|elements| elements.is_empty());
 
         if is_nil {
             Ok(())

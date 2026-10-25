@@ -14,7 +14,7 @@ use prefixmap::IriRef;
 use rudof_iri::IriS;
 use rudof_rdf::rdf_core::term::Object;
 use rudof_rdf::rdf_core::term::literal::ConcreteLiteral;
-use rudof_rdf::rdf_core::vocabs::{RdfVocab, ShexRVocab};
+use rudof_rdf::rdf_core::vocabs::ShexRVocab;
 use rudof_rdf::rdf_core::{BuildRDF, Rdf};
 use std::collections::HashMap;
 
@@ -144,6 +144,27 @@ impl<'a, RDF: BuildRDF> Ctx<'a, RDF> {
             ShapeExpr::External => {
                 let node = self.bnode()?;
                 self.add_type(node.clone(), ShexRVocab::sx_shape_external())?;
+                Ok(node.into())
+            },
+            ShapeExpr::Collection { shape_expr, min, max } => {
+                let node = self.bnode()?;
+                self.add_type(node.clone(), ShexRVocab::sx_collection())?;
+                let inner = self.shape_expr_to_rdf(&shape_expr.se)?;
+                self.add_triple(node.clone(), ShexRVocab::sx_shape_expr(), inner)?;
+                if let Some(min) = min {
+                    self.add_triple(
+                        node.clone(),
+                        ShexRVocab::sx_min(),
+                        Object::literal(ConcreteLiteral::integer(i128::from(*min))),
+                    )?;
+                }
+                if let Some(max) = max {
+                    self.add_triple(
+                        node.clone(),
+                        ShexRVocab::sx_max(),
+                        Object::literal(ConcreteLiteral::integer(i128::from(*max))),
+                    )?;
+                }
                 Ok(node.into())
             },
         }
@@ -610,15 +631,12 @@ impl<'a, RDF: BuildRDF> Ctx<'a, RDF> {
         items: &[T],
         elem: impl Fn(&mut Self, &T) -> Result<RDF::Term, ShExRBuilderError>,
     ) -> Result<RDF::Term, ShExRBuilderError> {
-        let mut rest: RDF::Term = RdfVocab::rdf_nil().into();
-        for item in items.iter().rev() {
-            let element = elem(self, item)?;
-            let node = self.bnode()?;
-            self.add_triple(node.clone(), RdfVocab::rdf_first(), element)?;
-            self.add_triple(node.clone(), RdfVocab::rdf_rest(), rest)?;
-            rest = node.into();
+        // rdf-array: a ShExR list is one sequence term, not a ladder
+        let mut elements = Vec::with_capacity(items.len());
+        for item in items {
+            elements.push(elem(self, item)?);
         }
-        Ok(rest)
+        Ok(<RDF::Term as rudof_rdf::rdf_core::term::Term>::sequence(elements))
     }
 }
 
@@ -651,6 +669,7 @@ mod tests {
     use rudof_iri::iri;
     use rudof_rdf::rdf_core::NeighsRDF;
     use rudof_rdf::rdf_core::term::Triple as _;
+    use rudof_rdf::rdf_core::vocabs::RdfVocab;
     use rudof_rdf::rdf_impl::OxigraphInMemory;
 
     fn schema_with_shape(label_iri: &str, shape_expr: ShapeExpr) -> Schema {
@@ -667,7 +686,14 @@ mod tests {
         ShExRBuilder::schema_to_rdf(&schema, &mut graph).unwrap();
 
         let triples: Vec<_> = graph.triples().unwrap().collect();
-        assert_eq!(triples.len(), 7, "unexpected triples: {triples:#?}");
+        // rdf-array: `sx:shapes ( <S1> )` is one triple whose object is a
+        // sequence, not a two-triple rdf:first/rdf:rest ladder
+        assert_eq!(triples.len(), 5, "unexpected triples: {triples:#?}");
+        assert!(
+            triples
+                .iter()
+                .any(|t| t.pred().as_str() == ShexRVocab::SX_SHAPES && t.obj().to_string() == "(<http://a.example/S1>)")
+        );
         let is_type = |t: &&<OxigraphInMemory as Rdf>::Triple, class: &str| {
             t.pred().as_str() == RdfVocab::RDF_TYPE && t.obj().to_string().contains(class)
         };

@@ -1,6 +1,6 @@
 use crate::unified_constraints::{NodeKind, UnifiedConstraint, UnifiedConstraintModel, Value};
 use crate::{DataGeneratorError, Result};
-use oxrdf::{NamedOrBlankNode, Term};
+use oxrdf::{Subject, Term};
 use regex::Regex;
 use rudof_rdf::rdf_core::NeighsRDF;
 use rudof_rdf::rdf_impl::OxigraphInMemory;
@@ -57,8 +57,8 @@ impl ConformanceMetrics {
             }
         };
 
-        let mut subject_type: HashMap<NamedOrBlankNode, String> = HashMap::new();
-        let mut outgoing_counts: HashMap<(NamedOrBlankNode, String), usize> = HashMap::new();
+        let mut subject_type: HashMap<Subject, String> = HashMap::new();
+        let mut outgoing_counts: HashMap<(Subject, String), usize> = HashMap::new();
 
         for triple in &triples {
             if triple.predicate.as_str() == RDF_TYPE {
@@ -121,8 +121,8 @@ impl ConformanceMetrics {
 fn validate_non_type_triple(
     triple: &oxrdf::Triple,
     model: &UnifiedConstraintModel,
-    subject_type: &HashMap<NamedOrBlankNode, String>,
-    outgoing_counts: &HashMap<(NamedOrBlankNode, String), usize>,
+    subject_type: &HashMap<Subject, String>,
+    outgoing_counts: &HashMap<(Subject, String), usize>,
 ) -> bool {
     let Some(shape_id) = subject_type.get(&triple.subject) else {
         return false;
@@ -155,11 +155,7 @@ fn validate_non_type_triple(
         .all(|c| evaluate_constraint(c, &triple.object, subject_type))
 }
 
-fn evaluate_constraint(
-    constraint: &UnifiedConstraint,
-    object: &Term,
-    subject_type: &HashMap<NamedOrBlankNode, String>,
-) -> bool {
+fn evaluate_constraint(constraint: &UnifiedConstraint, object: &Term, subject_type: &HashMap<Subject, String>) -> bool {
     match constraint {
         UnifiedConstraint::Datatype(expected) => match object {
             Term::Literal(lit) => lit.datatype().as_str() == expected,
@@ -167,11 +163,11 @@ fn evaluate_constraint(
         },
         UnifiedConstraint::ShapeReference(target_shape) => match object {
             Term::NamedNode(node) => subject_type
-                .get(&NamedOrBlankNode::NamedNode(node.clone()))
+                .get(&Subject::NamedNode(node.clone()))
                 .map(|s| s == target_shape)
                 .unwrap_or(false),
             Term::BlankNode(node) => subject_type
-                .get(&NamedOrBlankNode::BlankNode(node.clone()))
+                .get(&Subject::BlankNode(node.clone()))
                 .map(|s| s == target_shape)
                 .unwrap_or(false),
             _ => false,

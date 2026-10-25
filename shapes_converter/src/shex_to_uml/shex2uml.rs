@@ -247,6 +247,7 @@ impl ShEx2Uml {
         current_card: &UmlCardinality,
     ) -> Result<ValueConstraint, ShEx2UmlError> {
         match value_expr {
+            ShapeExpr::Collection { .. } => Err(ShEx2UmlError::not_implemented("Collections are not implemented yet")),
             ShapeExpr::ShapeOr { shape_exprs } => {
                 trace!(
                     "Processing ShapeOr for predicate {} with cardinality {} in node {},\nshape_exprs = {}",

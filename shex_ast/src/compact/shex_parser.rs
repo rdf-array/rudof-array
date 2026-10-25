@@ -295,7 +295,9 @@ fn visit_shape_expr(se: &ShapeExpr, f: &mut impl FnMut(Item)) {
                 visit_shape_expr(&se.se, f);
             }
         },
-        ShapeExpr::ShapeNot { shape_expr } => visit_shape_expr(&shape_expr.se, f),
+        ShapeExpr::ShapeNot { shape_expr } | ShapeExpr::Collection { shape_expr, .. } => {
+            visit_shape_expr(&shape_expr.se, f)
+        },
         ShapeExpr::NodeConstraint(nc) => f(Item::NodeConstraint(nc)),
         ShapeExpr::Shape(shape) => {
             if let Some(expression) = &shape.expression {
@@ -369,6 +371,56 @@ mod tests {
         };
         assert_eq!(nc.annotations().map(|anns| anns.len()), Some(1));
         assert_eq!(nc.sem_acts().map(|sas| sas.len()), Some(1));
+    }
+
+    fn collection_value(body: &str) -> std::result::Result<ShapeExpr, String> {
+        let str = format!("prefix : <http://a.example/>\nprefix xsd: <http://www.w3.org/2001/XMLSchema#>\n:S {body}\n");
+        let schema = ShExParser::parse(&str, None, &iri!("http://default/")).map_err(|e| e.to_string())?;
+        Ok(schema.shapes().unwrap()[0].shape_expr.clone())
+    }
+
+    #[test]
+    fn test_collection_shape_expressions() {
+        // rdf-array: ((shapeExpr))[min, max]
+        let bounds = |se: ShapeExpr| match se {
+            ShapeExpr::Collection { min, max, .. } => (min, max),
+            other => panic!("expected a collection, found {other:?}"),
+        };
+        assert_eq!(bounds(collection_value("((xsd:integer))").unwrap()), (None, None));
+        assert_eq!(
+            bounds(collection_value("((xsd:integer))[3]").unwrap()),
+            (Some(3), Some(3))
+        );
+        assert_eq!(bounds(collection_value("((IRI))[1, *]").unwrap()), (Some(1), Some(-1)));
+        assert_eq!(bounds(collection_value("((IRI))[1,]").unwrap()), (Some(1), Some(-1)));
+        assert_eq!(
+            bounds(collection_value("( ( . ) ) [ 0 , 2 ]").unwrap()),
+            (Some(0), Some(2))
+        );
+        assert_eq!(
+            bounds(collection_value("((((xsd:decimal))[2]))[3, *]").unwrap()),
+            (Some(3), Some(-1))
+        );
+        assert!(matches!(
+            collection_value("NOT ((LITERAL))").unwrap(),
+            ShapeExpr::ShapeNot { .. }
+        ));
+        // `((x) OR y)` is a parenthesised OR, not a collection
+        assert!(matches!(
+            collection_value("((IRI) OR LITERAL)").unwrap(),
+            ShapeExpr::ShapeOr { .. }
+        ));
+        for bad in [
+            "((.))[]",
+            "((.))[1 2]",
+            "((.))[,1]",
+            "((.))[*]",
+            "((.))[1, 2, 3]",
+            "((.))[1",
+            "((.))[3, 1]",
+        ] {
+            assert!(collection_value(bad).is_err(), "{bad} should not parse");
+        }
     }
 
     fn node_constraint_facets(body: &str) -> Vec<XsFacet> {

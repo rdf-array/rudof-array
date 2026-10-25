@@ -187,6 +187,7 @@ fn write_csv_table<S: Rdf>(
                             prefixmap.qualify(&predicate),
                             object.show_qualified(prefixmap)
                         ),
+                        seq @ Object::Sequence(_) => seq.show_qualified(prefixmap),
                     }
                 },
                 None => String::new(),
@@ -242,6 +243,7 @@ fn write_ascii_table<S: Rdf>(
                             prefixmap.qualify(&predicate),
                             object.show_qualified(prefixmap)
                         ),
+                        seq @ Object::Sequence(_) => seq.show_qualified(prefixmap),
                     }
                 },
                 None => String::new(),

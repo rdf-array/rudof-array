@@ -25,6 +25,12 @@ pub enum ManifestError {
         entry_name: String,
         shex_path: Box<PathBuf>,
     },
+    #[error("Error parsing ShExR for entry {entry_name} from file {shex_path}. Error: {error}")]
+    ShExRParsingError {
+        error: String,
+        entry_name: String,
+        shex_path: Box<PathBuf>,
+    },
     #[error("Reading Manifest Map from {map:?} for entry {entry:?}. Error: {error}")]
     ReadingShapeMap { entry: String, map: PathBuf, error: String },
 

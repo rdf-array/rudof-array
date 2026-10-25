@@ -145,6 +145,13 @@ pub enum RDFError {
         object: String,
     },
 
+    /// Expected an IRI or blank node, but found an rdf-array sequence.
+    ///
+    /// # Fields
+    /// - `sequence`: The sequence, in its `(e1 e2 …)` spelling
+    #[error("Expected IRI or BlankNode, found sequence: {sequence}")]
+    ExpectedIriOrBlankNodeFoundSequence { sequence: String },
+
     /// Error when expecting the focus node to be an IRI or blank node.
     /// # Fields
     /// - `term`: String representation of the focus node that is not an IRI or blank node
@@ -201,11 +208,12 @@ pub enum RDFError {
     #[error("Expected object, but found: {term}")]
     ExpectedObjectError { term: String },
 
-    /// Error when expecting rdf:nil but found a different term type.
+    /// Error when expecting the empty sequence `()` (rdf-array's reading of
+    /// an empty list) but found a different term.
     ///
     /// # Fields
-    /// - `term`: String representation of the term that is not an rdf:nil
-    #[error("Expected rdf:nil, but found: {term}")]
+    /// - `term`: String representation of the term that is not the empty sequence
+    #[error("Expected the empty sequence (), but found: {term}")]
     ExpectedNilError { term: String },
 
     // ========================================================================
@@ -348,12 +356,13 @@ pub enum RDFError {
     #[error("Condition validation failed: {msg}")]
     FailedCondError { msg: String },
 
-    /// Error when parsing an RDF list that contains a cycle.
+    /// Error when a list was expected: in rdf-array a list is one sequence
+    /// term, and `rdf:first`/`rdf:rest` ladders are ordinary triples.
     ///
     /// # Fields
-    /// - `node`: String representation of the node that creates the cycle
-    #[error("Recursive RDF list detected: node {node} was already visited, creating a cycle")]
-    RecursiveRDFListError { node: String },
+    /// - `node`: String representation of the term that is not a sequence
+    #[error("Expected a sequence (rdf-array), but found: {node}")]
+    ExpectedSequenceError { node: String },
 
     /// Error when attempting to convert a term to an RDF node (Object) fails.
     ///

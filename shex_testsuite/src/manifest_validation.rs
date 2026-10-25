@@ -31,6 +31,7 @@ use shex_ast::ir::{map_state::MapState, schema_ir::SchemaIR, semantic_actions_re
 #[cfg(not(target_family = "wasm"))]
 use shex_ast::shapemap::ValidationStatus;
 #[cfg(not(target_family = "wasm"))]
+use shex_ast::shexr::shexr_parser::ShExRParser;
 use shex_ast::{Node, ShExParser, ast::Schema as SchemaJson};
 #[cfg(not(target_family = "wasm"))]
 use shex_ast::{ResolveMethod, ir::ast2ir::AST2IR};
@@ -219,6 +220,19 @@ fn parse_schema(
                     shex_path: Box::new(path.to_path_buf()),
                 })
             })
+        },
+        ManifestShExSyntaxMode::ShExR => {
+            let base = path_to_iri(path)?;
+            let shexr_error = |error: String| {
+                Box::new(ManifestError::ShExRParsingError {
+                    error,
+                    entry_name: entry_name.to_string(),
+                    shex_path: Box::new(path.to_path_buf()),
+                })
+            };
+            let graph = OxigraphInMemory::from_path(path, &RDFFormat::Turtle, Some(base.as_str()), &ReaderMode::Strict)
+                .map_err(|e| shexr_error(e.to_string()))?;
+            ShExRParser::new(graph).parse().map_err(|e| shexr_error(e.to_string()))
         },
     }
 }
@@ -475,6 +489,7 @@ fn get_path_schema(schema: &String, folder: &Path, manifest_shex_syntax_mode: Ma
     let new_schema_name = match manifest_shex_syntax_mode {
         ManifestShExSyntaxMode::ShExJ => change_extension(schema.to_string(), ".shex".to_string(), ".json".to_string()),
         ManifestShExSyntaxMode::ShExC => schema.to_string(),
+        ManifestShExSyntaxMode::ShExR => change_extension(schema.to_string(), ".shex".to_string(), ".ttl".to_string()),
     };
     let json_path = Path::new(&new_schema_name);
     let mut attempt = PathBuf::from(folder);

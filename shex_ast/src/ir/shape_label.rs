@@ -42,6 +42,10 @@ impl ShapeLabel {
                 value: obj.to_string(),
                 error: "Triple cannot be a ShapeLabel".to_string(),
             }),
+            Object::Sequence(_) => Err(SchemaJsonError::InvalidShapeLabel {
+                value: obj.to_string(),
+                error: "Sequence cannot be a ShapeLabel".to_string(),
+            }),
         }
     }
 

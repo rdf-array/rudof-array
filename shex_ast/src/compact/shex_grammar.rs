@@ -239,6 +239,7 @@ fn shape_atom<'a>() -> impl FnMut(Span<'a>) -> IRes<'a, ShapeExpr> {
                 non_lit_opt_shape_or_ref(),
                 lit_node_constraint_annotated_shape_expr(),
                 shape_opt_non_lit,
+                collection_shape_expr,
                 paren_shape_expr,
                 dot,
             ))
@@ -298,6 +299,7 @@ fn inline_shape_atom<'a>() -> impl FnMut(Span<'a>) -> IRes<'a, ShapeExpr> {
                 non_lit_inline_opt_shape_or_ref(),
                 lit_node_constraint_shape_expr(),
                 inline_shape_or_ref_opt_non_lit,
+                collection_shape_expr,
                 paren_shape_expr,
                 dot,
             ))
@@ -363,6 +365,56 @@ fn lit_node_constraint_annotated_shape_expr<'a>() -> impl FnMut(Span<'a>) -> IRe
 fn node_constraint_annotations_sem_acts(nc: NodeConstraint, i: Span) -> IRes<NodeConstraint> {
     let (i, (_, annotations, _, sem_actions)) = (tws0, annotations, tws0, semantic_actions).parse(i)?;
     Ok((i, nc.with_annotations(Some(annotations)).with_sem_acts(sem_actions)))
+}
+
+/// rdf-array: the Collection shape expression, a shape atom.
+/// `collection ::= '(' '(' shapeExpression ')' ')' collectionBounds?`
+///
+/// `((x))` is always a collection, never `x` in two pairs of parentheses.
+fn collection_shape_expr(i: Span) -> IRes<ShapeExpr> {
+    let (i, (_, _, _, _, se, _, _, _, _)) = (
+        char('('),
+        tws0,
+        char('('),
+        tws0,
+        shape_expression(),
+        tws0,
+        char(')'),
+        tws0,
+        char(')'),
+    )
+        .parse(i)?;
+    let (i, bounds) = opt(collection_bounds()).parse(i)?;
+    let (min, max) = match bounds {
+        None => (None, None),
+        Some((min, max)) => (Some(min), Some(max)),
+    };
+    Ok((i, ShapeExpr::collection(se, min, max)))
+}
+
+/// rdf-array: `collectionBounds ::= '[' INTEGER (',' (INTEGER | '*')?)? ']'`,
+/// giving the minimum and the maximum (-1 for `*` or a missing maximum after
+/// the comma); `[m]` is exactly m elements. Once the `[` is read, the bounds
+/// must follow.
+fn collection_bounds<'a>() -> impl FnMut(Span<'a>) -> IRes<'a, (i32, i32)> {
+    move |i| {
+        let (i, _) = token_tws("[")(i)?;
+        let (i, (min, maybe_rest, _)) = cut(map_error(
+            move |i| (integer(), opt(rest_range()), token_tws("]")).parse(i),
+            || ShExParseError::ExpectedCollectionBounds,
+        ))
+        .parse(i)?;
+        let min = min as i32;
+        let max = match maybe_rest {
+            None => min,
+            Some(None) => -1,
+            Some(Some(max)) => max,
+        };
+        if min < 0 || (max >= 0 && min > max) {
+            return Err(Err::Failure(ShExParseError::CollectionMinAboveMax { min, max }.at(i)));
+        }
+        Ok((i, (min, max)))
+    }
 }
 
 fn paren_shape_expr(i: Span) -> IRes<ShapeExpr> {

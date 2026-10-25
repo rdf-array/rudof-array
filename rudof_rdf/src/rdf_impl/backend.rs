@@ -3,8 +3,8 @@
 use std::io;
 
 use oxrdf::{
-    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, NamedOrBlankNode as OxSubject,
-    Term as OxTerm, Triple as OxTriple,
+    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, Subject as OxSubject, Term as OxTerm,
+    Triple as OxTriple,
 };
 use prefixmap::{PrefixMap, PrefixMapError};
 use rudof_iri::IriS;

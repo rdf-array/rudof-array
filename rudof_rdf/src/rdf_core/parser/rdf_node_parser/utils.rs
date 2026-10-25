@@ -1,9 +1,7 @@
-use crate::rdf_core::vocabs::RdfVocab;
 use crate::rdf_core::{
     FocusRDF, RDFError,
-    parser::rdf_node_parser::{RDFNodeParse, constructors::SingleValuePropertyParser},
     term::{
-        Iri, IriOrBlankNode,
+        Iri, IriOrBlankNode, Term,
         literal::{ConcreteLiteral, Literal, NumericLiteral},
     },
 };
@@ -294,55 +292,22 @@ where
     Ok(literal.lexical_form().to_string())
 }
 
-pub fn parse_list_recursive<RDF>(mut visited: Vec<RDF::Term>, rdf: &mut RDF) -> Result<Vec<RDF::Term>, RDFError>
+/// Reads the list at the focus node: in rdf-array a list is one sequence term,
+/// `(e1 e2 …)`, whose elements are returned in order; `()` is the empty list.
+/// `rdf:first`/`rdf:rest` ladders are ordinary triples and are not read as lists.
+///
+/// # Errors
+///
+/// `RDFError::NoFocusNodeError` without a focus node, and
+/// `RDFError::ExpectedSequenceError` when the focus node is not a sequence.
+pub fn parse_sequence<RDF>(rdf: &mut RDF) -> Result<Vec<RDF::Term>, RDFError>
 where
     RDF: FocusRDF,
 {
-    let focus = rdf.get_focus().ok_or(RDFError::NoFocusNodeError)?.clone();
-
-    // Base case: rdf:nil
-    if is_nil_node::<RDF>(&focus) {
-        return Ok(Vec::new());
-    }
-
-    // Recursive case: extract first and rest
-    let first = SingleValuePropertyParser::new(RdfVocab::rdf_first())
-        .parse_focused(rdf)
-        .map_err(|e| RDFError::PropertyNotFoundError {
-            property: RdfVocab::RDF_FIRST.to_string(),
-            subject: focus.to_string(),
-            err: Box::new(e),
-        })?;
-
-    let rest = SingleValuePropertyParser::new(RdfVocab::rdf_rest())
-        .parse_focused(rdf)
-        .map_err(|e| RDFError::PropertyNotFoundError {
-            property: RdfVocab::RDF_REST.to_string(),
-            subject: focus.to_string(),
-            err: Box::new(e),
-        })?;
-
-    // Cycle detection
-    if visited.contains(&rest) {
-        return Err(RDFError::RecursiveRDFListError { node: rest.to_string() });
-    }
-
-    // Continue recursion
-    visited.push(rest.clone());
-    rdf.set_focus(&rest);
-
-    let mut result = vec![first];
-    result.extend(parse_list_recursive::<RDF>(visited, rdf)?);
-    Ok(result)
-}
-
-fn is_nil_node<RDF>(node: &RDF::Term) -> bool
-where
-    RDF: FocusRDF,
-{
-    let tmp: Result<RDF::IRI, _> = <RDF::Term as TryInto<RDF::IRI>>::try_into(node.clone());
-    match tmp {
-        Ok(iri) => iri.as_str() == RdfVocab::RDF_NIL,
-        Err(_) => false,
-    }
+    let focus = rdf.get_focus().ok_or(RDFError::NoFocusNodeError)?;
+    focus
+        .sequence_elements()
+        .ok_or_else(|| RDFError::ExpectedSequenceError {
+            node: focus.to_string(),
+        })
 }

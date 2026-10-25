@@ -297,7 +297,7 @@ impl Materializer {
 
 #[cfg(test)]
 mod tests {
-    use oxrdf::{NamedNode as OxNamedNode, NamedOrBlankNode as OxSubject, Term as OxTerm};
+    use oxrdf::{NamedNode as OxNamedNode, Subject as OxSubject, Term as OxTerm};
     use rudof_iri::{IriS, iri};
     use rudof_rdf::rdf_core::{Any, NeighsRDF};
     use rudof_rdf::rdf_impl::OxigraphInMemory;

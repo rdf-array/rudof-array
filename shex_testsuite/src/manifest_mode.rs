@@ -15,4 +15,7 @@ pub enum ManifestMode {
 pub enum ManifestShExSyntaxMode {
     ShExJ,
     ShExC,
+    /// The schema written in RDF (the `.ttl` beside the `.shex`), read by the
+    /// ShExR parser; in rdf-array its lists are sequences.
+    ShExR,
 }

@@ -63,6 +63,7 @@ impl Shacl2ShEx {
             Object::BlankNode(bn) => Ok(ShapeExprLabel::bnode(BNode::new(bn))),
             Object::Literal(lit) => Err(Shacl2ShExError::RDFNode2LabelLiteral { literal: lit.clone() }),
             Object::Triple { .. } => Err(Shacl2ShExError::not_implemented("shapes identified by RDF triples")),
+            Object::Sequence(_) => Err(Shacl2ShExError::not_implemented("shapes identified by sequences")),
         }
     }
 
@@ -140,6 +141,7 @@ impl Shacl2ShEx {
                         Err(Shacl2ShExError::UnexpectedLiteralForTargetClass { literal: lit.clone() })
                     },
                     Object::Triple { .. } => Err(Shacl2ShExError::not_implemented("RDF triples as target classes")),
+                    Object::Sequence(_) => Err(Shacl2ShExError::not_implemented("sequences as target classes")),
                 }?;
                 Ok(Some(value_set_value))
             },
@@ -319,7 +321,7 @@ impl Shacl2ShEx {
         let rdf_type = IriRef::iri(IriS::rdf_type());
         let value = match cls {
             Object::Iri(iri) => ValueSetValue::iri(IriRef::iri(iri.clone())),
-            Object::BlankNode(_) | Object::Literal(_) | Object::Triple { .. } => {
+            Object::BlankNode(_) | Object::Literal(_) | Object::Triple { .. } | Object::Sequence(_) => {
                 return Err(Shacl2ShExError::not_implemented("sh:class values that are not IRIs"));
             },
         };

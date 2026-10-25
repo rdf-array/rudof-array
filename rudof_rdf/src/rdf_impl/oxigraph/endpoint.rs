@@ -4,13 +4,14 @@ use crate::{
     rdf_core::{
         Any, AsyncRDF, EndpointLimits, Matcher, NeighsRDF, Rdf,
         query::{QueryRDF, QueryResultFormat, QuerySolution, QuerySolutions, VarName},
+        term::show_ox_sequence,
     },
     rdf_impl::{EndpointStrategy, OxigraphEndpointError},
 };
 use colored::*;
 use oxrdf::{
-    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, NamedOrBlankNode as OxSubject,
-    Term as OxTerm, Triple as OxTriple,
+    BlankNode as OxBlankNode, Literal as OxLiteral, NamedNode as OxNamedNode, Subject as OxSubject, Term as OxTerm,
+    Triple as OxTriple,
 };
 use prefixmap::PrefixMap;
 use regex::Regex;
@@ -1008,6 +1009,7 @@ impl Rdf for OxigraphEndpoint {
         match subj {
             OxSubject::BlankNode(bn) => self.show_blanknode(bn),
             OxSubject::NamedNode(n) => self.qualify_iri(n),
+            OxSubject::Sequence(s) => show_ox_sequence(s, |e| self.qualify_term(e)),
         }
     }
 
@@ -1017,6 +1019,7 @@ impl Rdf for OxigraphEndpoint {
             OxTerm::BlankNode(bn) => self.show_blanknode(bn),
             OxTerm::Literal(lit) => self.show_literal(lit),
             OxTerm::NamedNode(n) => self.qualify_iri(n),
+            OxTerm::Sequence(s) => show_ox_sequence(s, |e| self.qualify_term(e)),
             OxTerm::Triple(_) => unimplemented!("Triple terms not yet supported"),
         }
     }

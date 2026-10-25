@@ -11,7 +11,6 @@ mod if_expression;
 mod instances_of;
 mod intersection;
 mod limit;
-mod list;
 mod match_all;
 mod max;
 mod min;

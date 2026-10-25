@@ -1,6 +1,6 @@
 use crate::common::TestSuiteError;
 use crate::common::manifest::{Manifest, ManifestEntry, ManifestGraph};
-use oxrdf::NamedOrBlankNode;
+use oxrdf::Subject;
 use rudof_rdf::rdf_core::vocabs::{ShaclTestVocab, TestManifestVocab};
 use rudof_rdf::rdf_core::{RDFFormat, Rdf};
 use shacl::ast::ASTSchema;
@@ -27,8 +27,8 @@ impl<RDF: Rdf> TestInstance<RDF> {
 }
 
 impl ManifestEntry for TestInstance<RdfData> {
-    fn parse(manifest: &mut ManifestGraph, entry: NamedOrBlankNode) -> Result<Self, TestSuiteError> {
-        let action: NamedOrBlankNode = manifest
+    fn parse(manifest: &mut ManifestGraph, entry: Subject) -> Result<Self, TestSuiteError> {
+        let action: Subject = manifest
             .required_value(&entry, &TestManifestVocab::mf_action().into())?
             .try_into()?;
 

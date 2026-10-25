@@ -199,6 +199,11 @@ pub(crate) fn check_pattern(node: &Node, regex: &str, flags: Option<&str>, base:
             regex: regex.to_string(),
             flags: flags.map(|f| f.to_string()),
         })),
+        Object::Sequence(_) => Err(Box::new(SchemaIRError::PatternSequence {
+            node: node.to_string(),
+            regex: regex.to_string(),
+            flags: flags.map(|f| f.to_string()),
+        })),
     }?;
     let effective_regex = match flags {
         Some(f) if !f.is_empty() => format!("(?{f}){regex}"),
@@ -243,7 +248,7 @@ pub(crate) fn check_node_datatype(node: &Node, dt: &IriS) -> CResult<()> {
     })?;
     match object {
         Object::Literal(sliteral) => check_literal_datatype(&sliteral, dt, node),
-        Object::Iri(_) | Object::BlankNode(_) | Object::Triple { .. } => {
+        Object::Iri(_) | Object::BlankNode(_) | Object::Triple { .. } | Object::Sequence(_) => {
             Err(Box::new(SchemaIRError::DatatypeNoLiteral {
                 expected: Box::new(dt.clone()),
                 node: Box::new(node.clone()),

@@ -105,6 +105,32 @@ impl From<oxrdf::NamedOrBlankNode> for IriOrBlankNode {
     }
 }
 
+/// Attempts to convert an `oxrdf::Subject` into an `IriOrBlankNode`.
+///
+/// # Errors
+///
+/// Returns an error if the subject is an rdf-array sequence.
+impl TryFrom<oxrdf::Subject> for IriOrBlankNode {
+    type Error = RDFError;
+
+    fn try_from(value: oxrdf::Subject) -> Result<Self, Self::Error> {
+        match value {
+            oxrdf::Subject::NamedNode(iri) => Ok(IriOrBlankNode::Iri(iri.into())),
+            oxrdf::Subject::BlankNode(bnode) => Ok(IriOrBlankNode::BlankNode(bnode.into_string())),
+            oxrdf::Subject::Sequence(seq) => Err(RDFError::ExpectedIriOrBlankNodeFoundSequence {
+                sequence: seq.to_string(),
+            }),
+        }
+    }
+}
+
+/// Converts an `IriOrBlankNode` into an `oxrdf::Subject`.
+impl From<IriOrBlankNode> for oxrdf::Subject {
+    fn from(value: IriOrBlankNode) -> Self {
+        oxrdf::NamedOrBlankNode::from(value).into()
+    }
+}
+
 /// Converts an `IriOrBlankNode` into an `oxrdf::Term`.
 ///
 /// This conversion allows using `IriOrBlankNode` values in contexts where
@@ -142,6 +168,9 @@ impl TryFrom<oxrdf::Term> for IriOrBlankNode {
                 predicate: triple.predicate.to_string(),
                 object: triple.object.to_string(),
             }),
+            oxrdf::Term::Sequence(seq) => Err(RDFError::ExpectedIriOrBlankNodeFoundSequence {
+                sequence: seq.to_string(),
+            }),
         }
     }
 }
@@ -174,6 +203,9 @@ impl TryFrom<Object> for IriOrBlankNode {
                 subject: subject.to_string(),
                 predicate: predicate.to_string(),
                 object: object.to_string(),
+            }),
+            Object::Sequence(_) => Err(RDFError::ExpectedIriOrBlankNodeFoundSequence {
+                sequence: value.to_string(),
             }),
         }
     }

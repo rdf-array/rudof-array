@@ -1,13 +1,13 @@
 use crate::rdf_core::{
     FocusRDF, RDFError,
-    parser::rdf_node_parser::{RDFNodeParse, utils::parse_list_recursive},
+    parser::rdf_node_parser::{RDFNodeParse, utils::parse_sequence},
 };
 use std::marker::PhantomData;
 
-/// Parser that extracts all elements from an RDF list structure.
+/// Parser that extracts all elements from an RDF list.
 ///
-/// Traverses the RDF list using `rdf:first` and `rdf:rest` properties,
-/// collecting elements until reaching `rdf:nil`. Detects cycles.
+/// In rdf-array a list is one sequence term, `(e1 e2 …)`, and its elements are
+/// returned in order; `rdf:first`/`rdf:rest` ladders are ordinary triples.
 #[derive(Debug, Clone)]
 pub struct ListParser<RDF> {
     _marker: PhantomData<RDF>,
@@ -32,7 +32,6 @@ where
     type Output = Vec<RDF::Term>;
 
     fn parse_focused(&self, rdf: &mut RDF) -> Result<Self::Output, RDFError> {
-        let focus = rdf.get_focus().ok_or(RDFError::NoFocusNodeError)?;
-        parse_list_recursive::<RDF>(vec![focus.clone()], rdf)
+        parse_sequence::<RDF>(rdf)
     }
 }

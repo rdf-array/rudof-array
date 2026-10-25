@@ -11,7 +11,6 @@ use crate::rdf::parsers::node_expr::if_expression::if_expresion;
 use crate::rdf::parsers::node_expr::instances_of::instances_of;
 use crate::rdf::parsers::node_expr::intersection::intersection;
 use crate::rdf::parsers::node_expr::limit::limit;
-use crate::rdf::parsers::node_expr::list::list;
 use crate::rdf::parsers::node_expr::match_all::match_all;
 use crate::rdf::parsers::node_expr::max::max;
 use crate::rdf::parsers::node_expr::min::min;
@@ -74,6 +73,8 @@ pub(crate) fn node_expr_from_term<RDF: FocusRDF>(term: &RDF::Term, rdf: &mut RDF
         Object::Literal(lit) => Ok(ASTNodeExpr::Literal(lit)),
         Object::BlankNode(_) => blank_node_expr(term, rdf),
         Object::Triple { .. } => todo!("Triple term expressions are not supported yet"),
+        // rdf-array: a list node expression is one sequence term
+        Object::Sequence(members) => Ok(ASTNodeExpr::List(members)),
     }
 }
 
@@ -102,7 +103,6 @@ fn blank_node_expr<RDF: FocusRDF>(term: &RDF::Term, rdf: &mut RDF) -> Result<AST
         sum,
         instances_of,
         nodes_matching,
-        list,
         // TODO - These three take a shape, and parsing an inline shape from here would
         // TODO - make the shape parser and this parser mutually recursive.
         filter_shape,

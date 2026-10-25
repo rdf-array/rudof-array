@@ -67,11 +67,9 @@ fn add_shacl_path_nested() {
 }
 
 #[test]
-fn add_rdf_list_empty_is_nil() {
+fn add_rdf_list_empty_is_the_empty_sequence() {
+    // rdf-array: an empty list is `()`, not rdf:nil
     let mut graph = OxigraphInMemory::empty();
     let head = graph.add_rdf_list(Vec::new()).unwrap();
-    assert_eq!(
-        head.to_string(),
-        format!("<{}>", crate::rdf_core::vocabs::RdfVocab::RDF_NIL)
-    );
+    assert_eq!(head.to_string(), "()");
 }

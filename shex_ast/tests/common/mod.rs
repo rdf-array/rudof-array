@@ -40,6 +40,15 @@ pub fn schemas_dir() -> PathBuf {
     .to_path_buf()
 }
 
+/// rdf-array: the Collection schemas of shexTest-contrib.
+pub fn contrib_schemas_dir() -> PathBuf {
+    Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../shex_testsuite/shexTest-contrib/schemas-contrib"
+    ))
+    .to_path_buf()
+}
+
 pub fn read_manifest(dir: &Path) -> Vec<ManifestEntry> {
     let text = std::fs::read_to_string(dir.join("manifest.jsonld")).expect("reading shexTest schemas manifest");
     let manifest: ManifestFile = serde_json::from_str(&text).expect("parsing shexTest schemas manifest");

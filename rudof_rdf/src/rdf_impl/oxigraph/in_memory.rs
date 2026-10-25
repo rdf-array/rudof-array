@@ -3,15 +3,15 @@ use super::in_memory_error::OxigraphInMemoryError;
 use crate::rdf_core::query::{QueryRDF, QueryResultFormat, QuerySolution, QuerySolutions, VarName};
 use crate::rdf_core::{
     AsyncRDF, BlankNodeMode, BuildRDF, FocusRDF, Matcher, NeighsRDF, RDFFormat, Rdf, apply_blank_node_mode,
+    term::show_ox_sequence,
 };
 
 use crate::rdf_core::vocabs::RdfVocab;
 use colored::*;
 use oxjsonld::JsonLdParser;
 use oxrdf::{
-    BlankNode as OxBlankNode, Graph, GraphName, Literal as OxLiteral, NamedNode as OxNamedNode, NamedNodeRef,
-    NamedOrBlankNode as OxSubject, NamedOrBlankNodeRef as OxSubjectRef, Quad, Term as OxTerm, TermRef,
-    Triple as OxTriple, TripleRef,
+    BlankNode as OxBlankNode, Graph, GraphName, Literal as OxLiteral, NamedNode as OxNamedNode, NamedNodeRef, Quad,
+    Subject as OxSubject, SubjectRef as OxSubjectRef, Term as OxTerm, TermRef, Triple as OxTriple, TripleRef,
 };
 use oxrdfio::{JsonLdProfileSet, RdfFormat, RdfSerializer};
 use oxrdfxml::RdfXmlParser;
@@ -825,6 +825,7 @@ impl Rdf for OxigraphInMemory {
         match subj {
             OxSubject::BlankNode(bn) => self.show_blanknode(bn),
             OxSubject::NamedNode(n) => self.qualify_iri(n),
+            OxSubject::Sequence(s) => show_ox_sequence(s, |e| self.qualify_term(e)),
         }
     }
 
@@ -848,6 +849,7 @@ impl Rdf for OxigraphInMemory {
             OxTerm::BlankNode(bn) => self.show_blanknode(bn),
             OxTerm::Literal(lit) => self.show_literal(lit),
             OxTerm::NamedNode(n) => self.qualify_iri(n),
+            OxTerm::Sequence(s) => show_ox_sequence(s, |e| self.qualify_term(e)),
             OxTerm::Triple(_) => unimplemented!("RDF-star triples not yet supported"),
         }
     }
@@ -1292,7 +1294,7 @@ fn rdf_type() -> OxNamedNode {
 ///
 /// A quad representing the triple in the specified graph.
 fn triple_to_quad(t: TripleRef, graph_name: GraphName) -> Quad {
-    let subj: oxrdf::NamedOrBlankNode = t.subject.into();
+    let subj: oxrdf::Subject = t.subject.into();
     let pred: oxrdf::NamedNode = t.predicate.into();
     let obj: oxrdf::Term = t.object.into();
     Quad::new(subj, pred, obj, graph_name)
@@ -1315,7 +1317,7 @@ fn triple_to_quad(t: TripleRef, graph_name: GraphName) -> Quad {
 /// * `Ok(None)` - Parsing failed in lax mode (skip this item)
 /// * `Err(error)` - Parsing failed in strict mode
 fn validate_triple_iris(triple: TripleRef) -> Result<(), String> {
-    if let oxrdf::NamedOrBlankNodeRef::NamedNode(n) = triple.subject {
+    if let oxrdf::SubjectRef::NamedNode(n) = triple.subject {
         OxNamedNode::new(n.as_str()).map_err(|e| e.to_string())?;
     }
     OxNamedNode::new(triple.predicate.as_str()).map_err(|e| e.to_string())?;

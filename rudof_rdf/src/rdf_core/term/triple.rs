@@ -166,6 +166,11 @@ pub trait Subject: Debug + Display + PartialEq + Clone + Eq + Hash {
     fn is_triple(&self) -> bool {
         self.kind() == TermKind::Triple
     }
+
+    /// Returns `true` if this subject is a sequence (rdf-array).
+    fn is_sequence(&self) -> bool {
+        self.kind() == TermKind::Sequence
+    }
 }
 
 /// Represents an RDF object value in the object position of a triple.
@@ -196,6 +201,9 @@ pub enum Object {
         predicate: IriS,
         object: Box<Object>,
     },
+    /// An rdf-array sequence: one term holding its elements in order.
+    /// `()` is the empty sequence, which is not `rdf:nil`.
+    Sequence(Vec<Object>),
 }
 
 /// ## Constructors methods
@@ -232,6 +240,14 @@ impl Object {
         Object::Literal(ConcreteLiteral::str(str))
     }
 
+    /// Creates a sequence object (rdf-array) from its elements.
+    ///
+    /// # Parameters
+    /// - `elements`: The elements of the sequence, in order
+    pub fn sequence(elements: Vec<Object>) -> Object {
+        Object::Sequence(elements)
+    }
+
     /// Creates a boolean literal object.
     ///
     /// # Parameters
@@ -259,6 +275,15 @@ impl Object {
                 predicate,
                 object,
             } => subject.as_ref().length() + predicate.as_str().len() + object.as_ref().length(),
+            Object::Sequence(elements) => elements.iter().map(Object::length).sum(),
+        }
+    }
+
+    /// Returns the elements if this object is a sequence (rdf-array).
+    pub fn sequence_elements(&self) -> Option<&[Object]> {
+        match self {
+            Object::Sequence(elements) => Some(elements),
+            _ => None,
         }
     }
 
@@ -352,7 +377,29 @@ impl Object {
                 prefixmap.qualify(predicate),
                 object.show_qualified(prefixmap)
             ),
+            Object::Sequence(elements) => show_sequence(elements, |e| e.show_qualified(prefixmap)),
         }
+    }
+}
+
+/// Spells an `oxrdf` sequence `( e1 e2 )`, or `()` when it is empty, as Turtle
+/// does, showing each element with `show` (an implementation's `qualify_term`).
+pub fn show_ox_sequence(seq: &oxrdf::Sequence, show: impl Fn(&oxrdf::Term) -> String) -> String {
+    if seq.is_empty() {
+        "()".to_string()
+    } else {
+        let parts: Vec<String> = seq.elements().iter().map(show).collect();
+        format!("( {} )", parts.join(" "))
+    }
+}
+
+/// Spells a sequence `( e1 e2 )`, or `()` when it is empty, as Turtle does.
+fn show_sequence(elements: &[Object], show: impl Fn(&Object) -> String) -> String {
+    if elements.is_empty() {
+        "()".to_string()
+    } else {
+        let parts: Vec<String> = elements.iter().map(show).collect();
+        format!("( {} )", parts.join(" "))
     }
 }
 
@@ -398,6 +445,7 @@ impl From<Object> for oxrdf::Term {
                 let object: oxrdf::Term = (*object).into();
                 oxrdf::Triple::new(subject, predicate, object).into()
             },
+            Object::Sequence(elements) => oxrdf::Sequence::new(elements.into_iter().map(oxrdf::Term::from)).into(),
         }
     }
 }
@@ -422,7 +470,7 @@ impl TryFrom<oxrdf::Term> for Object {
             oxrdf::Term::Triple(triple) => {
                 let (s, p, o) = triple.into_components();
                 let object = Object::try_from(o)?;
-                let subject = IriOrBlankNode::from(s);
+                let subject = IriOrBlankNode::try_from(s)?;
                 let predicate = p.into();
                 Ok(Object::Triple {
                     subject: Box::new(subject),
@@ -430,6 +478,12 @@ impl TryFrom<oxrdf::Term> for Object {
                     object: Box::new(object),
                 })
             },
+            oxrdf::Term::Sequence(seq) => Ok(Object::Sequence(
+                seq.into_elements()
+                    .into_iter()
+                    .map(Object::try_from)
+                    .collect::<Result<_, _>>()?,
+            )),
         }
     }
 }
@@ -460,6 +514,26 @@ impl TryFrom<Object> for oxrdf::NamedOrBlankNode {
                 predicate: predicate.to_string(),
                 object: object.to_string(),
             }),
+            Object::Sequence(_) => Err(RDFError::ExpectedIriOrBlankNodeFoundSequence {
+                sequence: value.to_string(),
+            }),
+        }
+    }
+}
+
+/// Attempts to convert an `Object` into an `oxrdf::Subject`.
+///
+/// In rdf-array a subject is an IRI, a blank node or a sequence.
+///
+/// # Errors
+/// Returns `RDFError` for literals and triple terms.
+impl TryFrom<Object> for oxrdf::Subject {
+    type Error = RDFError;
+
+    fn try_from(value: Object) -> Result<Self, Self::Error> {
+        match value {
+            Object::Sequence(elements) => Ok(oxrdf::Sequence::new(elements.into_iter().map(oxrdf::Term::from)).into()),
+            other => oxrdf::NamedOrBlankNode::try_from(other).map(oxrdf::Subject::from),
         }
     }
 }
@@ -506,6 +580,16 @@ impl Display for Object {
                 predicate,
                 object,
             } => write!(f, "<<{subject} {predicate} {object}>>"),
+            Object::Sequence(elements) => {
+                write!(f, "(")?;
+                for (i, e) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{e}")?;
+                }
+                write!(f, ")")
+            },
         }
     }
 }
@@ -528,6 +612,7 @@ impl Debug for Object {
                 predicate,
                 object,
             } => write!(f, "Triple {{{subject:?}, {predicate:?}, {object:?}}}"),
+            Object::Sequence(elements) => write!(f, "Sequence {elements:?}"),
         }
     }
 }
@@ -550,6 +635,19 @@ impl PartialOrd for Object {
             (Object::Iri(a), Object::Iri(b)) => Some(a.cmp(b)),
             (Object::BlankNode(a), Object::BlankNode(b)) => Some(a.cmp(b)),
             (Object::Literal(a), Object::Literal(b)) => a.partial_cmp(b),
+            // rdf-array: sequences come after every other kind of term and
+            // compare element by element, a prefix first.
+            (Object::Sequence(a), Object::Sequence(b)) => {
+                for (x, y) in a.iter().zip(b.iter()) {
+                    match x.partial_cmp(y)? {
+                        Ordering::Equal => {},
+                        other => return Some(other),
+                    }
+                }
+                Some(a.len().cmp(&b.len()))
+            },
+            (Object::Sequence(_), _) => Some(Ordering::Greater),
+            (_, Object::Sequence(_)) => Some(Ordering::Less),
             (Object::Iri(_), _) => Some(Ordering::Less),
             (Object::BlankNode(_), Object::Iri(_)) => Some(Ordering::Greater),
             (Object::BlankNode(_), Object::Literal(_)) => Some(Ordering::Less),
@@ -592,6 +690,7 @@ impl Show for Object {
                 pm.qualify(predicate),
                 pm.show(object.as_ref())
             ),
+            Object::Sequence(elements) => show_sequence(elements, |e| e.show(pm)),
         }
     }
 }

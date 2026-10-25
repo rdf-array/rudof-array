@@ -115,6 +115,10 @@ impl TryFrom<&Node> for ObjectValue {
                 node: node.to_string(),
                 error: "RDF triples are not supported in ObjectValue".to_string(),
             }),
+            Object::Sequence(_) => Err(SchemaJsonError::InvalidNodeInObjectValue {
+                node: node.to_string(),
+                error: "Sequences are not supported in ObjectValue".to_string(),
+            }),
         }
     }
 }

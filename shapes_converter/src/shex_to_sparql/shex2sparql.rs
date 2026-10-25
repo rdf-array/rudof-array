@@ -73,6 +73,7 @@ fn shape_expr2patterns(
         ShapeExpr::ShapeOr { shape_exprs: _ } => Err(ShEx2SparqlError::not_implemented("ShapeOr")),
         ShapeExpr::ShapeAnd { shape_exprs: _ } => Err(ShEx2SparqlError::not_implemented("ShapeAND")),
         ShapeExpr::ShapeNot { shape_expr: _ } => Err(ShEx2SparqlError::not_implemented("ShapeNot")),
+        ShapeExpr::Collection { .. } => Err(ShEx2SparqlError::not_implemented("Collection")),
         ShapeExpr::NodeConstraint(nc) => {
             let msg = format!("Node constraint: {nc:?}");
             Err(ShEx2SparqlError::not_implemented(msg.as_str()))

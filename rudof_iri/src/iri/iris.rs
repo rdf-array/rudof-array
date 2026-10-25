@@ -1,6 +1,6 @@
 use crate::error::IriSError;
 use oxiri::{Iri, IriRef};
-use oxrdf::{NamedNode, NamedOrBlankNode, Term};
+use oxrdf::{NamedNode, NamedOrBlankNode, Subject, Term};
 use serde::{Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -363,6 +363,13 @@ impl From<IriS> for NamedNode {
 }
 
 impl From<IriS> for NamedOrBlankNode {
+    fn from(value: IriS) -> Self {
+        let named_node: NamedNode = value.into();
+        named_node.into()
+    }
+}
+
+impl From<IriS> for Subject {
     fn from(value: IriS) -> Self {
         let named_node: NamedNode = value.into();
         named_node.into()

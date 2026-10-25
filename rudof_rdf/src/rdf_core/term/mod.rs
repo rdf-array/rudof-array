@@ -10,7 +10,7 @@ pub use blank_node::{BlankNode, BlankNodeRef, ConcreteBlankNode};
 pub use iri::Iri;
 pub use iri_or_blanknode::IriOrBlankNode;
 pub use term::{Term, TermKind};
-pub use triple::{ConcreteTriple, Object, Subject, Triple};
+pub use triple::{ConcreteTriple, Object, Subject, Triple, show_ox_sequence};
 
 #[cfg(test)]
 mod tests {

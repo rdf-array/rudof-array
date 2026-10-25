@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use oxrdf::{BlankNode, NamedOrBlankNode, Term, Triple};
+use oxrdf::{BlankNode, Sequence, Subject, Term, Triple};
 
 use crate::rdf_core::RDFError;
 
@@ -71,14 +71,25 @@ pub fn apply_blank_node_mode(triples: Vec<Triple>, mode: BlankNodeMode) -> Vec<T
         .into_iter()
         .map(|t| {
             let subject = match t.subject {
-                NamedOrBlankNode::BlankNode(b) => NamedOrBlankNode::BlankNode(relabel(&b)),
+                Subject::BlankNode(b) => Subject::BlankNode(relabel(&b)),
+                Subject::Sequence(s) => Subject::Sequence(relabel_sequence(s, &mut relabel)),
                 other => other,
             };
-            let object = match t.object {
-                Term::BlankNode(b) => Term::BlankNode(relabel(&b)),
-                other => other,
-            };
+            let object = relabel_term(t.object, &mut relabel);
             Triple::new(subject, t.predicate, object)
         })
         .collect()
+}
+
+/// Relabels a blank node object, or the blank nodes inside a sequence (rdf-array).
+fn relabel_term(term: Term, relabel: &mut impl FnMut(&BlankNode) -> BlankNode) -> Term {
+    match term {
+        Term::BlankNode(b) => Term::BlankNode(relabel(&b)),
+        Term::Sequence(s) => Term::Sequence(relabel_sequence(s, relabel)),
+        other => other,
+    }
+}
+
+fn relabel_sequence(seq: Sequence, relabel: &mut impl FnMut(&BlankNode) -> BlankNode) -> Sequence {
+    Sequence::new(seq.into_elements().into_iter().map(|e| relabel_term(e, relabel)))
 }

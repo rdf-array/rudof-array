@@ -16,6 +16,13 @@ pub enum SchemaIRError {
         flags: Option<String>,
     },
 
+    #[error("Pattern /{regex}/{} fails over sequence {node}", flags.as_deref().unwrap_or(""))]
+    PatternSequence {
+        node: String,
+        regex: String,
+        flags: Option<String>,
+    },
+
     #[error("Invalid regex /{regex}")]
     InvalidRegex { regex: String },
 

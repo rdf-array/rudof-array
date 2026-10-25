@@ -226,6 +226,13 @@ fn object_to_visual_node<R: NeighsRDF>(
             let triple = graph.create_triple_term(rdf, s, p, o)?;
             Ok(triple)
         },
+        // rdf-array: a sequence is drawn as one node labelled with its spelling.
+        Object::Sequence(_) => Ok(VisualRDFNode::Literal {
+            value: match rdf.prefixmap() {
+                Some(pm) => object.show_qualified(&pm),
+                None => object.to_string(),
+            },
+        }),
     }
 }
 

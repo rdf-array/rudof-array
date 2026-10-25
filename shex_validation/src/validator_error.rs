@@ -195,6 +195,32 @@ pub enum ValidatorError {
         reasons: Reasons,
     },
 
+    /// rdf-array: a Collection shape expression was checked against a node
+    /// that is not a sequence.
+    #[error("Collection error: node {node} is not a sequence, as {shape_expr} requires")]
+    SequenceExpected {
+        shape_expr: Box<ShapeExpr>,
+        node: Box<Node>,
+    },
+
+    /// rdf-array: a sequence whose length is outside a Collection's bounds.
+    #[error("Collection error: sequence {node} has {length} elements, outside the bounds of {shape_expr}")]
+    CollectionLengthViolation {
+        shape_expr: Box<ShapeExpr>,
+        node: Box<Node>,
+        length: usize,
+    },
+
+    /// rdf-array: the element at `index` (1-based) of a sequence does not
+    /// conform to the Collection's shape expression.
+    #[error("Collection error: element {index} ({element}) of sequence {node} failed: {errors}")]
+    CollectionElementFailure {
+        node: Box<Node>,
+        index: usize,
+        element: Box<Node>,
+        errors: ValidatorErrors,
+    },
+
     #[error("Adding non conformant {node}@{label} error: {error}")]
     AddingNonConformantError { node: String, label: String, error: String },
 
@@ -296,6 +322,27 @@ impl ValidatorError {
         let show_idx = |idx: &ShapeLabelIdx| Self::show_idx(idx, schema);
 
         let s = match self {
+            ValidatorError::SequenceExpected { node, shape_expr } => format!(
+                "Collection {}: node {} is not a sequence",
+                show_shape_expr(shape_expr, schema, width),
+                show_node(node)
+            ),
+            ValidatorError::CollectionLengthViolation {
+                node,
+                shape_expr,
+                length,
+            } => format!(
+                "Collection {}: sequence {} has {length} elements",
+                show_shape_expr(shape_expr, schema, width),
+                show_node(node)
+            ),
+            ValidatorError::CollectionElementFailure {
+                node, index, element, ..
+            } => format!(
+                "Collection: element {index} ({}) of sequence {} failed",
+                show_node(element),
+                show_node(node)
+            ),
             ValidatorError::ShapeFailed { node, idx, .. } => {
                 format!("Shape {} failed for node {}", show_idx(idx), show_node(node))
             },
@@ -475,7 +522,8 @@ impl ValidatorError {
             | ValidatorError::ShapeAndError { errors, .. }
             | ValidatorError::ParentShapeMainShapeFailed { errors, .. }
             | ValidatorError::ParentShapeFailed { errors, .. }
-            | ValidatorError::ShapeExtendsError { errors, .. } => {
+            | ValidatorError::ShapeExtendsError { errors, .. }
+            | ValidatorError::CollectionElementFailure { errors, .. } => {
                 add_errors_to_tree(tree, errors, nodes_prefixmap, schema, width)
             },
             ValidatorError::ShapeOrError { errors, .. } => {
@@ -577,7 +625,9 @@ impl ValidatorError {
             | ValidatorError::ExternalShapeUnresolved { .. }
             | ValidatorError::MaxStepsExceeded { .. }
             | ValidatorError::Cancelled { .. }
-            | ValidatorError::StartActFailed { .. } => Ok(()),
+            | ValidatorError::StartActFailed { .. }
+            | ValidatorError::SequenceExpected { .. }
+            | ValidatorError::CollectionLengthViolation { .. } => Ok(()),
         }
     }
 

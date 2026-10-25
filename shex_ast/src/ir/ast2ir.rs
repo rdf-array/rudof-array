@@ -371,6 +371,23 @@ impl AST2IR {
                 compiled_schema.replace_shape(idx, not_se.clone());
                 Ok(not_se)
             },
+            ast::ShapeExpr::Collection {
+                shape_expr: sew,
+                min,
+                max,
+            } => {
+                let internal_idx = compiled_schema.new_index(source_iri);
+                let se = self.compile_shape_expr(&sew.se, &internal_idx, compiled_schema, source_iri, base)?;
+                compiled_schema.replace_shape(&internal_idx, se.clone());
+                let (min, max) = cnv_collection_bounds(*min, *max)?;
+                let coll_se = ShapeExpr::Collection {
+                    expr: internal_idx,
+                    min,
+                    max,
+                };
+                compiled_schema.replace_shape(idx, coll_se.clone());
+                Ok(coll_se)
+            },
             ast::ShapeExpr::Shape(shape) => {
                 let new_extra = self.cnv_extra(&shape.extra, &compiled_schema.prefixmap())?;
                 let rbe_table: Expr = match &shape.expression {
@@ -753,6 +770,12 @@ impl AST2IR {
                     trace!("Returning NOT cond with idx {idx_not}");
                     Ok((mk_cond_ref(idx_not), display))
                 },
+                ast::ShapeExpr::Collection { .. } => {
+                    let idx_coll = compiled_schema.new_index(source_iri);
+                    let coll_se = self.compile_shape_expr(se, &idx_coll, compiled_schema, source_iri, base)?;
+                    compiled_schema.replace_shape(&idx_coll, coll_se.clone());
+                    Ok((mk_cond_ref(idx_coll), format!("{coll_se}")))
+                },
                 ast::ShapeExpr::External => {
                     let idx_ext = compiled_schema.new_index(source_iri);
                     compiled_schema.replace_shape(&idx_ext, ShapeExpr::External {});
@@ -844,7 +867,9 @@ impl AST2IR {
                 }
                 Ok(())
             },
-            ast::ShapeExpr::ShapeNot { shape_expr } => self.collect_triple_expr_labels_shape_expr(&shape_expr.se),
+            ast::ShapeExpr::ShapeNot { shape_expr } | ast::ShapeExpr::Collection { shape_expr, .. } => {
+                self.collect_triple_expr_labels_shape_expr(&shape_expr.se)
+            },
             ast::ShapeExpr::Shape(shape) => {
                 if let Some(expr) = shape.triple_expr() {
                     self.collect_triple_expr_labels_triple_expr(&expr)?;
@@ -1472,4 +1497,31 @@ where
     }
     // If we get here, all items resulted in errors
     Err(errors)
+}
+
+/// rdf-array: the bounds of a Collection shape expression; absent means 0 and
+/// unbounded, and a negative maximum (-1, written `*`) is unbounded too.
+fn cnv_collection_bounds(min: Option<i32>, max: Option<i32>) -> CResult<(usize, Option<usize>)> {
+    let min = match min {
+        None => 0,
+        Some(m) if m >= 0 => m as usize,
+        Some(m) => {
+            return Err(Box::new(SchemaIRError::Internal {
+                msg: format!("Collection minimum must not be negative: {m}"),
+            }));
+        },
+    };
+    let max = match max {
+        Some(m) if m >= 0 => Some(m as usize),
+        _ => None,
+    };
+    if max.is_some_and(|max| min > max) {
+        return Err(Box::new(SchemaIRError::Internal {
+            msg: format!(
+                "Collection minimum {min} is above its maximum {}",
+                max.unwrap_or_default()
+            ),
+        }));
+    }
+    Ok((min, max))
 }

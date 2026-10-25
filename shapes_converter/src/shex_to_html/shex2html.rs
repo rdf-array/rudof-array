@@ -314,6 +314,7 @@ impl ShEx2Html {
             ShapeExpr::ShapeNot { shape_expr } => Err(ShEx2HtmlError::not_implemented(
                 format!("Shape NOTs {shape_expr:?} not implemented yet").as_str(),
             )),
+            ShapeExpr::Collection { .. } => Err(ShEx2HtmlError::not_implemented("Collections are not implemented yet")),
             ShapeExpr::NodeConstraint(nc) => {
                 if let Some(datatype) = nc.datatype() {
                     let name = iri_ref2name(&datatype, &self.config, &None, prefixmap)?;

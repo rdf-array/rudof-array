@@ -2,8 +2,8 @@ use prefixmap::PrefixMap;
 use rudof_iri::IriS;
 use std::io::Write;
 
-use crate::rdf_core::vocabs::{RdfVocab, ShaclVocab};
-use crate::rdf_core::{BlankNodeMode, NeighsRDF, RDFFormat, SHACLPath};
+use crate::rdf_core::vocabs::ShaclVocab;
+use crate::rdf_core::{BlankNodeMode, NeighsRDF, RDFFormat, SHACLPath, term::Term};
 
 /// Trait for building and modifying RDF graphs.
 ///
@@ -104,21 +104,15 @@ pub trait BuildRDF: NeighsRDF {
     /// Adds an Blank node to the RDF graph and get the node identifier
     fn add_bnode(&mut self) -> Result<Self::BNode, Self::Err>;
 
-    /// Adds an RDF collection to the graph, returning the term that denotes the
-    /// head of the list (`rdf:nil` for an empty one).
+    /// Returns the term for an RDF collection: in rdf-array the sequence term
+    /// holding `items` (`()` for an empty one); nothing is added to the graph.
     ///
     /// # Arguments
     ///
     /// * `items` - The elements of the list, in order
     fn add_rdf_list(&mut self, items: Vec<Self::Term>) -> Result<Self::Term, Self::Err> {
-        let mut rest: Self::Term = RdfVocab::rdf_nil().into();
-        for item in items.into_iter().rev() {
-            let node: Self::Subject = self.add_bnode()?.into();
-            self.add_triple(node.clone(), RdfVocab::rdf_first(), item)?;
-            self.add_triple(node.clone(), RdfVocab::rdf_rest(), rest)?;
-            rest = node.into();
-        }
-        Ok(rest)
+        // rdf-array: a list is one sequence term; no rdf:first/rdf:rest triples are added.
+        Ok(Self::Term::sequence(items))
     }
 
     /// Adds a SHACL property path to the graph, returning the term that denotes

@@ -14,6 +14,7 @@ mod tests {
         instances_of => "instancesOf",
         intersection => "intersection",
         limit => "limit",
+        #[ignore = "rdf-array: `()` is the empty sequence, a list expression with no members, not the constant rdf:nil"]
         list => "list",
         max => "max",
         min => "min",

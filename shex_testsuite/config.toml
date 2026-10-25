@@ -5,6 +5,11 @@ manifest_shex_syntax_mode = "ShExC"
 
 # List of entries that are excluded from the manifest run
 excluded_entries = [
+  # rdf-array: upstream drift, not sequences. shexTest-array is 35 commits newer
+  # than the shexTest rudof 0.3.35 pins; these entries overflow the stack in
+  # vanilla rudof 0.3.35 too, and abort the whole run (see doc/rdf-array.md).
+  "8dot5a2b1c_fail-a5b1",
+  "8dot5a2b1c_fail-a6b2c1",
   #"1val1emptylanguageStemMinuslanguage3_passLAtfr-be-fbcl",
   #"1val1LANGTAG_LabLTen-fr-jura",
   #"1val1emptylanguageStemMinuslanguageStem3_LAtfr-be-fbcl",

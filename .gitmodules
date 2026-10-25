@@ -1,7 +1,12 @@
 
 [submodule "shex_testsuite/shexTest"]
 	path = shex_testsuite/shexTest
-	url = https://github.com/shexSpec/shexTest
+	url = https://github.com/rdf-array/shexTest-array
+	branch = rdf-sequences
 [submodule "shacl/tests/data-shapes"]
 	path = shacl/tests/data-shapes
 	url = https://github.com/w3c/data-shapes.git
+[submodule "shex_testsuite/shexTest-contrib"]
+	path = shex_testsuite/shexTest-contrib
+	url = https://github.com/rdf-array/shexTest-contrib
+	branch = main

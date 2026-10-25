@@ -1,6 +1,6 @@
 use crate::rdf_core::{
     FocusRDF, RDFError,
-    parser::rdf_node_parser::{RDFNodeParse, constructors::ValuesPropertyParser, utils::parse_list_recursive},
+    parser::rdf_node_parser::{RDFNodeParse, constructors::ValuesPropertyParser, utils::parse_sequence},
 };
 use rudof_iri::IriS;
 use std::{cell::RefCell, fmt::Debug, marker::PhantomData};
@@ -533,10 +533,10 @@ where
     }
 }
 
-/// Parses an RDF collection (rdf:first/rdf:rest list) into a vector.
+/// Parses an RDF collection into a vector.
 ///
-/// Recursively traverses the RDF list structure starting from the current focus node,
-/// applying the element parser to each list member.
+/// In rdf-array the collection at the focus node is one sequence term; the
+/// element parser is applied to each of its elements in turn.
 ///
 /// # Type Parameters
 ///
@@ -574,8 +574,7 @@ where
     /// Returns `RDFError::NoFocusNodeError` if no focus is set,
     /// or errors from the list parsing utility or element parser.
     fn parse_focused(&self, rdf: &mut RDF) -> Result<Self::Output, RDFError> {
-        let focus = rdf.get_focus().ok_or(RDFError::NoFocusNodeError)?.clone();
-        let nodes = parse_list_recursive::<RDF>(vec![focus], rdf)?;
+        let nodes = parse_sequence::<RDF>(rdf)?;
 
         let mut results = Vec::with_capacity(nodes.len());
         for node in nodes {

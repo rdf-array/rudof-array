@@ -1,7 +1,7 @@
 use crate::common::TestSuiteError;
-use oxrdf::{NamedNode, NamedOrBlankNode, Term};
+use oxrdf::{NamedNode, Subject, Term};
 use rudof_rdf::rdf_core::term::Triple;
-use rudof_rdf::rdf_core::vocabs::{RdfVocab, TestManifestVocab};
+use rudof_rdf::rdf_core::vocabs::TestManifestVocab;
 use rudof_rdf::rdf_core::{Any, NeighsRDF, RDFFormat};
 use shacl::validator::store::{Graph, Store};
 use sparql_service::RdfData;
@@ -31,7 +31,7 @@ impl ManifestGraph {
             entries: Vec::new(),
         };
 
-        let subject = NamedOrBlankNode::NamedNode(NamedNode::new_unchecked(manifest.base.clone()));
+        let subject = Subject::NamedNode(NamedNode::new_unchecked(manifest.base.clone()));
         manifest.entries = manifest.parse_entries(&subject)?;
 
         Ok(manifest)
@@ -53,7 +53,7 @@ impl ManifestGraph {
         &self.entries
     }
 
-    pub fn value(&self, subject: &NamedOrBlankNode, property: &NamedNode) -> Result<Option<Term>, TestSuiteError> {
+    pub fn value(&self, subject: &Subject, property: &NamedNode) -> Result<Option<Term>, TestSuiteError> {
         Ok(self
             .store
             .triples_matching(subject, property, &Any)?
@@ -61,33 +61,20 @@ impl ManifestGraph {
             .next())
     }
 
-    pub fn required_value(&self, subject: &NamedOrBlankNode, property: &NamedNode) -> Result<Term, TestSuiteError> {
+    pub fn required_value(&self, subject: &Subject, property: &NamedNode) -> Result<Term, TestSuiteError> {
         self.value(subject, property)?
             .ok_or_else(|| TestSuiteError::Validation(format!("{subject} has no {property}")))
     }
 
+    /// rdf-array: a list (`mf:entries ( … )`) is one sequence term.
     pub fn list(&self, head: Term) -> Result<Vec<Term>, TestSuiteError> {
-        let mut members = Vec::new();
-        let mut current = head;
-
-        while let Ok(subject) = TryInto::<NamedOrBlankNode>::try_into(current.clone()) {
-            let rdf_first: NamedNode = RdfVocab::rdf_first().into();
-            match self.value(&subject, &rdf_first)? {
-                None => break,
-                Some(member) => members.push(member),
-            };
-
-            let rdf_rest: NamedNode = RdfVocab::rdf_rest().into();
-            current = match self.value(&subject, &rdf_rest)? {
-                None => break,
-                Some(rest) => rest,
-            };
+        match head {
+            Term::Sequence(seq) => Ok(seq.into_elements()),
+            other => Err(TestSuiteError::Validation(format!("{other} is not a sequence"))),
         }
-
-        Ok(members)
     }
 
-    fn parse_entries(&self, subject: &NamedOrBlankNode) -> Result<Vec<Term>, TestSuiteError> {
+    fn parse_entries(&self, subject: &Subject) -> Result<Vec<Term>, TestSuiteError> {
         let mf_entries: NamedNode = TestManifestVocab::mf_entries().into();
 
         match self.value(subject, &mf_entries)? {

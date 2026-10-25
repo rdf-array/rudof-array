@@ -55,6 +55,14 @@ pub enum Reason {
         shape_expr: ShapeLabelIdx,
         reasons: Reasons,
     },
+    /// rdf-array: a sequence within the bounds of a Collection shape
+    /// expression, each of whose elements passed it; `reasons` holds the
+    /// elements' reasons in order.
+    Collection {
+        node: Node,
+        shape_expr: ShapeExpr,
+        reasons: Reasons,
+    },
     ShapeNot {
         node: Node,
         shape_expr: ShapeExpr,
@@ -123,7 +131,9 @@ impl Reason {
                 }
                 Ok(())
             },
-            Reason::ShapeOr { reasons, .. } => add_reasons_to_tree(tree, reasons, nodes_prefixmap, schema, width),
+            Reason::ShapeOr { reasons, .. } | Reason::Collection { reasons, .. } => {
+                add_reasons_to_tree(tree, reasons, nodes_prefixmap, schema, width)
+            },
             Reason::ShapeNot { errors_evidences, .. } => {
                 for err in errors_evidences.iter() {
                     let err_str = err.show_qualified(nodes_prefixmap, schema, width)?;
@@ -198,6 +208,11 @@ impl Reason {
                 "OR passed ({}@{})",
                 node.show_qualified(nodes_prefixmap),
                 schema.show_shape_idx(shape_expr, width),
+            )),
+            Reason::Collection { node, shape_expr, .. } => Ok(format!(
+                "Collection passed ({}@{})",
+                node.show_qualified(nodes_prefixmap),
+                schema.show_shape_expr(shape_expr, width),
             )),
             Reason::ShapeNot { node, shape_expr, .. } => Ok(format!(
                 "NOT passed ({}@{})",
@@ -335,6 +350,14 @@ impl Display for Reason {
             } => write!(
                 f,
                 "Shape OR passed. Node {node}, shape: {shape_expr}, reasons: {reasons}"
+            ),
+            Reason::Collection {
+                node,
+                shape_expr,
+                reasons,
+            } => write!(
+                f,
+                "Collection passed. Node {node}, shape: {shape_expr}, reasons: {reasons}"
             ),
             Reason::ShapeNot {
                 node,

@@ -1,6 +1,6 @@
 use crate::common::TestSuiteError;
 use crate::common::manifest::{Manifest, ManifestEntry, ManifestGraph};
-use oxrdf::{NamedNode, NamedOrBlankNode, Term};
+use oxrdf::{NamedNode, Subject, Term};
 use rudof_rdf::rdf_core::term::Triple;
 use rudof_rdf::rdf_core::vocabs::{RdfsVocab, ShaclTestVocab, TestManifestVocab};
 use rudof_rdf::rdf_core::{Any, NeighsRDF};
@@ -25,13 +25,13 @@ pub(crate) struct NodeExprTest {
 }
 
 impl ManifestEntry for NodeExprTest {
-    fn parse(manifest: &mut ManifestGraph, entry: NamedOrBlankNode) -> Result<Self, TestSuiteError> {
+    fn parse(manifest: &mut ManifestGraph, entry: Subject) -> Result<Self, TestSuiteError> {
         let label = manifest
             .value(&entry, &RdfsVocab::rdfs_label().into())?
             .map(|label| label.to_string())
             .unwrap_or_else(|| entry.to_string());
 
-        let action: NamedOrBlankNode = manifest
+        let action: Subject = manifest
             .required_value(&entry, &TestManifestVocab::mf_action().into())?
             .try_into()?;
 

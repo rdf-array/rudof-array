@@ -5,7 +5,7 @@ use crate::rdf_core::{
         RDFNodeParse,
         constructors::{ListParser, SingleValuePropertyParser},
     },
-    term::Iri,
+    term::{Iri, Term},
 };
 use rudof_iri::IriS;
 
@@ -42,13 +42,18 @@ where
             return Ok(SHACLPath::iri(IriS::new_unchecked(iri.as_str())));
         }
 
+        // rdf-array: a sequence path `( p1 p2 … )` is one sequence term
+        if self.term.is_sequence() {
+            return parse_sequence(rdf);
+        }
+
         // Check if it's a blank node (complex path expression)
         if RDF::term_as_bnode(&self.term).is_ok() {
             // Try each path construct in order (Sequence, Alternative, etc.)
             return try_parse_complex_path(rdf);
         }
 
-        // Literals are not valid SHACL paths
+        // Literals and triple terms are not valid SHACL paths
         Err(RDFError::InvalidSHACLPathError {
             node: self.term.to_string(),
             error: Box::new(RDFError::ConversionError {
@@ -63,11 +68,6 @@ fn try_parse_complex_path<RDF>(rdf: &mut RDF) -> Result<SHACLPath, RDFError>
 where
     RDF: FocusRDF,
 {
-    // Try sequence path (RDF list at focus)
-    if let Ok(path) = parse_sequence(rdf) {
-        return Ok(path);
-    }
-
     // Try alternative path (sh:alternativePath)
     if let Ok(path) = parse_alternative(rdf) {
         return Ok(path);
@@ -101,7 +101,7 @@ where
     })
 }
 
-/// Parses a SHACL sequence path from an RDF list at the current focus.
+/// Parses a SHACL sequence path from the sequence at the current focus.
 fn parse_sequence<RDF>(rdf: &mut RDF) -> Result<SHACLPath, RDFError>
 where
     RDF: FocusRDF,

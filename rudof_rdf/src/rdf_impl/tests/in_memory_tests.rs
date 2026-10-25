@@ -18,7 +18,7 @@ use crate::rdf_parser;
 use oxrdf::BaseDirection;
 use oxrdf::Literal as OxLiteral;
 use oxrdf::NamedNode as OxNamedNode;
-use oxrdf::NamedOrBlankNode as OxSubject;
+use oxrdf::Subject as OxSubject;
 use oxrdf::Term as OxTerm;
 use oxrdf::Triple as OxTriple;
 use rudof_iri::IriS;
