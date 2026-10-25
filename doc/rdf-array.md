@@ -162,8 +162,8 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
   (`nPlus1`, `PstarT`, `PTstar`, `P2T2`, `false-lead-excluding-value-shape`, `skipped`, …).
   `shex_ast`'s format round trip reads all 484 schemas' `.ttl` forms, with their lists as
   sequences, and passes.
-- **Suite drift, not sequences.** shexTest-array is 35 upstream commits newer than the shexTest
-  rudof 0.3.35 pins, and vanilla 0.3.35 fails the same entries on upstream's newer suite:
+- **Suite drift, not sequences** ([rdf-array#11](https://github.com/rdf-array/rdf-array/issues/11)). shexTest-array is 35 upstream commits
+  newer than the shexTest rudof 0.3.35 pins, and vanilla 0.3.35 fails the same entries on upstream's newer suite:
   `8dot5a2b1c_fail-a5b1` and `8dot5a2b1c_fail-a6b2c1` overflow the stack and abort the whole run
   (excluded in `config.toml`); `1dotShapeCode1fail_abort`, `open2OnecardStarclosecardStar_fail-aI1`,
   `open2OnedotcloseCode1fail_abort`, `open3EachdotcloseCode1fail_abort` fail
@@ -194,25 +194,29 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
   wrote `rdf:first`/`rdf:rest` ladders now reads and writes sequences, and a ladder is no longer a
   list anywhere in rudof: in ShExR, in SHACL shapes graphs, in test manifests. This keeps every
   Turtle-array shapes graph working, and is the reading SHACL-array would most likely take; it is
-  noted for the SHACL-array discussion in rdf-array.md.
+  raised for SHACL-array as [rdf-array#9](https://github.com/rdf-array/rdf-array/issues/9).
 - **A Collection is a connective.** The engine proves a Collection's elements on demand, as it
   proves the components of `AND`/`OR`/`NOT`, rather than scheduling them as dependencies: the
   elements are not neighbours of the node. As a triple constraint's value, a Collection gets an
   index of its own (as `NOT` does), so the value is a reference to it.
 - **Bounds.** `[m]` is exactly m; `[m,]` and `[m, *]` are unbounded, as in shex.js-array; a minimum
   above the maximum (`((x))[3, 1]`) is rejected, by the ShExC parser and when a ShExJ or ShExR
-  schema is compiled, as jena-array does (shex.js-array accepts it; rdf-array.md lists it as
-  open).
+  schema is compiled, as jena-array does (shex.js-array accepts it;
+  [rdf-array#6](https://github.com/rdf-array/rdf-array/issues/6)).
 - **Node constraints on sequences.** A sequence satisfies no node kind, datatype or pattern, and
   matches `.`, as in shex.js-array.
 
 ## Not done
 
-- A sequence as a shape map's focus node, or in a value set (`ObjectValue` refuses it).
+- A sequence as a shape map's focus node, or in a value set (`ObjectValue` refuses it):
+  ShEx-array does not define either yet ([rdf-array#10](https://github.com/rdf-array/rdf-array/issues/10)).
 - A sequence as the subject of a triple term in rudof's `Object` (it is an error), matching
-  oxigraph-array, whose Turtle does not parse one either.
+  oxigraph-array, whose Turtle does not parse one either ([rdf-array#5](https://github.com/rdf-array/rdf-array/issues/5)).
 - `shapes_converter` (ShEx to HTML, UML, SPARQL, rdf-config) and `shapes_comparator` report a
   Collection as not implemented; the visualizer draws a sequence as one labelled node.
 - SHACL-array itself: the SHACL suites run with lists read as sequences, which is not yet a
   specified reading.
 - The Python (`pyrudof`) and WASM bindings build but were not tested with sequences.
+
+Issues for this fork live in [rdf-array/rdf-array](https://github.com/rdf-array/rdf-array/issues),
+as for every rdf-array fork.
