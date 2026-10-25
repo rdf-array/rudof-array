@@ -101,7 +101,7 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 - `Cargo.toml`, `Cargo.lock`: `[patch.crates-io]` onto oxigraph-array. Cargo resolved `sha1` to
   0.10 for both its users after the patch, and spareval needs 0.11; the lock gives spareval
-  `sha1 0.11.0` as upstream's did.
+  `sha1 0.11.0` as upstream's did, by hand ([rdf-array#14](https://github.com/rdf-array/rdf-array/issues/14)).
 - `rudof_iri/src/iri/iris.rs`: `From<IriS> for oxrdf::Subject`.
 - `rudof_rdf`: `term/term.rs` (`TermKind::Sequence`, `is_sequence`, `sequence_elements`,
   `sequence`), `term/triple.rs` (`Object::Sequence`, its conversions, ordering, display;
@@ -159,7 +159,8 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
   Collections pass. In ShExR mode the 34 further failures are entries with no ShExR form: the
   `.ttl` beside the `.shex` is missing (`1dot-relative`, `extends-abstract-multi-empty`,
   `extends-closed-diamond`, `extends-closed-3diamond-split`) or is the test's data, not a schema
-  (`nPlus1`, `PstarT`, `PTstar`, `P2T2`, `false-lead-excluding-value-shape`, `skipped`, …).
+  (`nPlus1`, `PstarT`, `PTstar`, `P2T2`, `false-lead-excluding-value-shape`, `skipped`, …)
+  ([rdf-array#16](https://github.com/rdf-array/rdf-array/issues/16)).
   `shex_ast`'s format round trip reads all 484 schemas' `.ttl` forms, with their lists as
   sequences, and passes.
 - **Suite drift, not sequences** ([rdf-array#11](https://github.com/rdf-array/rdf-array/issues/11)). shexTest-array is 35 upstream commits
@@ -213,10 +214,13 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 - A sequence as the subject of a triple term in rudof's `Object` (it is an error), matching
   oxigraph-array, whose Turtle does not parse one either ([rdf-array#5](https://github.com/rdf-array/rdf-array/issues/5)).
 - `shapes_converter` (ShEx to HTML, UML, SPARQL, rdf-config) and `shapes_comparator` report a
-  Collection as not implemented; the visualizer draws a sequence as one labelled node.
+  Collection as not implemented ([rdf-array#12](https://github.com/rdf-array/rdf-array/issues/12)); the visualizer draws a sequence as one
+  labelled node, and `shex-validate` spells a sequence's literals with full datatype IRIs
+  ([rdf-array#15](https://github.com/rdf-array/rdf-array/issues/15)).
 - SHACL-array itself: the SHACL suites run with lists read as sequences, which is not yet a
   specified reading.
-- The Python (`pyrudof`) and WASM bindings build but were not tested with sequences.
+- The Python (`pyrudof`) and WASM bindings build but were not tested with sequences
+  ([rdf-array#13](https://github.com/rdf-array/rdf-array/issues/13)).
 
 Issues for this fork live in [rdf-array/rdf-array](https://github.com/rdf-array/rdf-array/issues),
 as for every rdf-array fork.
