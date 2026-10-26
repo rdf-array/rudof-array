@@ -5,8 +5,13 @@
 	branch = rdf-sequences
 [submodule "shacl/tests/data-shapes"]
 	path = shacl/tests/data-shapes
-	url = https://github.com/w3c/data-shapes.git
+	url = https://github.com/rdf-array/data-shapes-array
+	branch = rdf-sequences
 [submodule "shex_testsuite/shexTest-contrib"]
 	path = shex_testsuite/shexTest-contrib
 	url = https://github.com/rdf-array/shexTest-contrib
+	branch = main
+[submodule "shacl/tests/data-shapes-contrib"]
+	path = shacl/tests/data-shapes-contrib
+	url = https://github.com/rdf-array/data-shapes-contrib
 	branch = main

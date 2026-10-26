@@ -38,8 +38,10 @@ cargo run -p shex_testsuite -- -m shex_testsuite/shexTest-contrib/validation-con
 
 The submodules are `shex_testsuite/shexTest` ([shexTest-array](https://github.com/rdf-array/shexTest-array),
 branch `rdf-sequences`), `shex_testsuite/shexTest-contrib` ([shexTest-contrib](https://github.com/rdf-array/shexTest-contrib),
-branch `main`) and `shacl/tests/data-shapes` (W3C's, unchanged). `git submodule update --remote` moves
-the first two to their branches' heads.
+branch `main`), `shacl/tests/data-shapes` ([data-shapes-array](https://github.com/rdf-array/data-shapes-array),
+the W3C SHACL suites read as SHACL-array, branch `rdf-sequences`) and `shacl/tests/data-shapes-contrib`
+([data-shapes-contrib](https://github.com/rdf-array/data-shapes-contrib), branch `main`, run by
+`shacl/tests/contrib.rs`). `git submodule update --remote` moves them to their branches' heads.
 
 ## What a sequence does here
 
@@ -173,13 +175,19 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
   `format_roundtrip.rs`).
 - **shexTest-contrib** (branch `main`): validation 37 of 37 in each of ShExC, ShExJ and ShExR;
   schemas 13 of 13; negative syntax 6 of 6.
-- **Flagged** (`#[ignore = "rdf-array: …"]`, in the W3C SHACL suites, which have no -array fork):
-  `core/path/path-strange-001` and `-002` (their `sh:path` is spelled as an explicit
-  `rdf:first`/`rdf:rest` ladder, which is no longer a list), `core/complex/shacl-shacl`
-  (shacl-shacl's list shapes walk `rdf:rest*/rdf:first`, but the shapes graph's lists are now
-  sequences), `shacl12/node-expr/list` (`()` is the empty sequence, a list expression with no
-  members, not the constant `rdf:nil`). The other SHACL tests, the sequence paths and `sh:in`
-  among them, pass with their lists read as sequences.
+- **SHACL suites** (2026-10-26, data-shapes-array): `core/path/path-strange-001` (re-recorded: the
+  ladder is ordinary triples and the path is `^ex:p`) and `shacl12/node-expr/list` (re-recorded: `()`
+  outputs nothing) now pass. Flagged (`#[ignore = "rdf-array: …"]`): `path-strange-002` (rejected in the
+  fork; rudof-array also panics on its `sh:inversePath ( ex:p )`) and `core/complex/shacl-shacl` (the
+  fork's shacl-shacl checks lists with `sh:memberShape` and `sh:minListLength`, which rudof does not have
+  yet). The other SHACL tests, the sequence paths and `sh:in` among them, pass with their lists read as
+  sequences.
+- **data-shapes-contrib**: 6 of 21 pass; 15 ignored with the reason: the 11 that need SHACL 1.2's list
+  constraints, 2 that expect `sht:Failure` (the runner reads no failure expectations; the contrib build
+  checks that rudof-array refuses them), `empty-path-001` (rudof-array accepts `sh:path ()`) and
+  `seq-in-or-001` (rudof-array reports the results of the shapes inside `sh:or` as the focus node's).
+  The divergences are [rdf-array#17](https://github.com/rdf-array/rdf-array/issues/17).
+- `cargo test -p shacl --test shacl_testsuite`: 141 passed, 0 failed, 40 ignored.
 - **Numbers.** `cargo test --workspace`: 1456 passed, 0 failed, 30 ignored (26 ignored upstream,
   the 4 flagged above); `cargo clippy --workspace --all-targets` and `cargo fmt --check` clean.
   The CLI validates Turtle-array data (`rudof shex-validate -s colour.shex -m map.sm data.ttl`

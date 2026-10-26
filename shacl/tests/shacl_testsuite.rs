@@ -2,6 +2,8 @@
 #[macro_use]
 mod common;
 #[cfg(not(target_family = "wasm"))]
+mod contrib;
+#[cfg(not(target_family = "wasm"))]
 mod core;
 #[cfg(not(target_family = "wasm"))]
 mod shacl12;

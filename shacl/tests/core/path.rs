@@ -13,9 +13,8 @@ mod tests {
         path_sequence_001 => "path-sequence-001",
         path_sequence_002 => "path-sequence-002",
         path_sequence_duplicate_001 => "path-sequence-duplicate-001",
-        #[ignore = "rdf-array: the sh:path is spelled as an rdf:first/rdf:rest ladder, which is no longer a list"]
         path_strange_001 => "path-strange-001",
-        #[ignore = "rdf-array: the sh:path is spelled as an rdf:first/rdf:rest ladder, which is no longer a list"]
+        #[ignore = "rdf-array: rejected in data-shapes-array (mf:status sht:rejected): without the ladder only a one-member sequence path is left; rudof-array also panics on it (rudof_rdf neighs_rdf.rs unwrap)"]
         path_strange_002 => "path-strange-002",
         path_unused_001_data => "path-unused-001-data",
         path_unused_001_shapes => "path-unused-001-shapes",
