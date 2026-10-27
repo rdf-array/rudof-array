@@ -4,7 +4,7 @@ rdf-array is RDF whose data model has one more kind of term, the **sequence**: `
 is one term holding its elements in order, not a ladder of `rdf:first`/`rdf:rest` blank nodes, and
 `()` is the empty sequence, not `rdf:nil`. Triples that spell out `rdf:first`/`rdf:rest` stay
 ordinary triples and `rdf:nil` an ordinary IRI; they are just no longer what `( … )` means. See
-[rdf-array.md](https://rdf-array.github.io/rdf-array/rdf-array.html) for the model and the proposed
+[rdf-array.md](https://rdf-array.github.io/rdf-array/docs/rdf-array.html) for the model and the proposed
 SPARQL and ShEx syntax.
 
 This fork of [rudof](https://github.com/rudof-project/rudof) is the ShEx-array implementation in
