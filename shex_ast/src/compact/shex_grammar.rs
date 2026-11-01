@@ -7,8 +7,8 @@ use crate::compact::{
 use crate::iri_ref_or_wildcard::IriRefOrWildcard;
 use crate::string_or_wildcard::StringOrWildcard;
 use crate::{
-    Annotation, BNode, LangOrWildcard, NodeConstraint, NodeKind, NumericFacet, Pattern, SemAct, Shape, ShapeExpr,
-    ShapeExprLabel, StringFacet, TripleExpr, TripleExprLabel, XsFacet, iri_exclusion::IriExclusion,
+    Annotation, BNode, LangOrWildcard, ListExpr, NodeConstraint, NodeKind, NumericFacet, Pattern, SemAct, Shape,
+    ShapeExpr, ShapeExprLabel, StringFacet, TripleExpr, TripleExprLabel, XsFacet, iri_exclusion::IriExclusion,
     language_exclusion::LanguageExclusion, literal_exclusion::LiteralExclusion, object_value::ObjectValue,
     value_set_value::ValueSetValue,
 };
@@ -236,10 +236,10 @@ fn shape_atom<'a>() -> impl FnMut(Span<'a>) -> IRes<'a, ShapeExpr> {
     map_error(
         move |i| {
             alt((
+                list_shape,
                 non_lit_opt_shape_or_ref(),
                 lit_node_constraint_annotated_shape_expr(),
                 shape_opt_non_lit,
-                collection_shape_expr,
                 paren_shape_expr,
                 dot,
             ))
@@ -296,10 +296,10 @@ fn inline_shape_atom<'a>() -> impl FnMut(Span<'a>) -> IRes<'a, ShapeExpr> {
     map_error(
         move |i| {
             alt((
+                list_shape,
                 non_lit_inline_opt_shape_or_ref(),
                 lit_node_constraint_shape_expr(),
                 inline_shape_or_ref_opt_non_lit,
-                collection_shape_expr,
                 paren_shape_expr,
                 dot,
             ))
@@ -367,54 +367,162 @@ fn node_constraint_annotations_sem_acts(nc: NodeConstraint, i: Span) -> IRes<Nod
     Ok((i, nc.with_annotations(Some(annotations)).with_sem_acts(sem_actions)))
 }
 
-/// rdf-array: the Collection shape expression, a shape atom.
-/// `collection ::= '(' '(' shapeExpression ')' ')' collectionBounds?`
+/// rdf-array: the LIST shape expression, a shape atom, though not after `EXTENDS`.
+/// `listShape ::= 'LIST' '(' listOneOf ')' | 'LIST' cardinality inlineShapeAtom`
 ///
-/// `((x))` is always a collection, never `x` in two pairs of parentheses.
-fn collection_shape_expr(i: Span) -> IRes<ShapeExpr> {
-    let (i, (_, _, _, _, se, _, _, _, _)) = (
-        char('('),
-        tws0,
-        char('('),
-        tws0,
-        shape_expression(),
-        tws0,
-        char(')'),
-        tws0,
-        char(')'),
-    )
-        .parse(i)?;
-    let (i, bounds) = opt(collection_bounds()).parse(i)?;
-    let (min, max) = match bounds {
-        None => (None, None),
-        Some((min, max)) => (Some(min), Some(max)),
-    };
-    Ok((i, ShapeExpr::collection(se, min, max)))
+/// Once `LIST` is read one of the two must follow, so a bare `LIST x` is a
+/// syntax error. A cardinality after the list belongs to the triple constraint.
+fn list_shape(i: Span) -> IRes<ShapeExpr> {
+    let (i, _) = (tws0, keyword_no_case("LIST"), tws0).parse(i)?;
+    let (i, expression) = cut(map_error(
+        |i| alt((list_shape_regex, list_shape_cardinality)).parse(i),
+        || ShExParseError::ExpectedListBody,
+    ))
+    .parse(i)?;
+    Ok((i, ShapeExpr::list_shape(expression)))
 }
 
-/// rdf-array: `collectionBounds ::= '[' INTEGER (',' (INTEGER | '*')?)? ']'`,
-/// giving the minimum and the maximum (-1 for `*` or a missing maximum after
-/// the comma); `[m]` is exactly m elements. Once the `[` is read, the bounds
-/// must follow.
-fn collection_bounds<'a>() -> impl FnMut(Span<'a>) -> IRes<'a, (i32, i32)> {
-    move |i| {
-        let (i, _) = token_tws("[")(i)?;
-        let (i, (min, maybe_rest, _)) = cut(map_error(
-            move |i| (integer(), opt(rest_range()), token_tws("]")).parse(i),
-            || ShExParseError::ExpectedCollectionBounds,
-        ))
-        .parse(i)?;
-        let min = min as i32;
-        let max = match maybe_rest {
-            None => min,
-            Some(None) => -1,
-            Some(Some(max)) => max,
-        };
-        if min < 0 || (max >= 0 && min > max) {
-            return Err(Err::Failure(ShExParseError::CollectionMinAboveMax { min, max }.at(i)));
-        }
-        Ok((i, (min, max)))
+/// From `listShape`: `'(' listOneOf ')'`
+fn list_shape_regex(i: Span) -> IRes<ListExpr> {
+    let (i, _) = (char('('), tws0).parse(i)?;
+    let (i, expression) = cut(list_one_of).parse(i)?;
+    let (i, _) = cut(list_group_close).parse(i)?;
+    Ok((i, expression))
+}
+
+/// From `listShape`: `cardinality inlineShapeAtom`, the same as `( x cardinality )`
+fn list_shape_cardinality(i: Span) -> IRes<ListExpr> {
+    let (i, (min, max)) = list_cardinality(i)?;
+    let (i, _) = tws0(i)?;
+    let (i, se) = cut(inline_shape_atom()).parse(i)?;
+    Ok((i, ListExpr::member(se).with_cardinality(min, max)))
+}
+
+/// A `LIST` cardinality; a minimum above the maximum is rejected.
+fn list_cardinality(i: Span) -> IRes<(Option<i32>, Option<i32>)> {
+    let (i, cardinality) = cardinality()(i)?;
+    let (min, max) = (cardinality.min(), cardinality.max());
+    if let (Some(lo), Some(hi)) = (min, max)
+        && hi >= 0
+        && lo > hi
+    {
+        return Err(Err::Failure(ShExParseError::ListMinAboveMax { min: lo, max: hi }.at(i)));
     }
+    Ok((i, (min, max)))
+}
+
+fn list_group_close(i: Span) -> IRes<()> {
+    let (i, _) = map_error(token_tws(")"), || ShExParseError::ExpectedListGroupClose)(i)?;
+    Ok((i, ()))
+}
+
+/// `listOneOf ::= listEachOf ( '|' listEachOf )*`
+fn list_one_of(i: Span) -> IRes<ListExpr> {
+    let (i, first) = list_each_of(i)?;
+    let (i, rest) = many0(preceded(token_tws("|"), cut(list_each_of))).parse(i)?;
+    if rest.is_empty() {
+        return Ok((i, first));
+    }
+    let mut expressions = vec![first];
+    expressions.extend(rest);
+    Ok((
+        i,
+        ListExpr::ListOneOf {
+            expressions,
+            min: None,
+            max: None,
+        },
+    ))
+}
+
+/// `listEachOf ::= listUnary ( ';' listUnary )*`
+fn list_each_of(i: Span) -> IRes<ListExpr> {
+    let (i, first) = list_unary(i)?;
+    let (i, rest) = many0(preceded(token_tws(";"), cut(list_unary))).parse(i)?;
+    if rest.is_empty() {
+        return Ok((i, first));
+    }
+    let mut expressions = vec![first];
+    expressions.extend(rest);
+    Ok((
+        i,
+        ListExpr::ListEachOf {
+            expressions,
+            min: None,
+            max: None,
+        },
+    ))
+}
+
+/// `listUnary ::= listMember cardinality?`
+fn list_unary(i: Span) -> IRes<ListExpr> {
+    let (i, expression) = list_member(i)?;
+    let (i, _) = tws0(i)?;
+    let (i, maybe_cardinality) = opt(list_cardinality).parse(i)?;
+    let (i, _) = tws0(i)?;
+    match maybe_cardinality {
+        None => Ok((i, expression)),
+        Some((min, max)) => Ok((i, expression.with_cardinality(min, max))),
+    }
+}
+
+/// `listMember ::= listMemberOr | '(' listOneOf ')'`: inside `LIST ( )`, `(`
+/// opens a group, so a member's first atom is never parenthesised.
+fn list_member(i: Span) -> IRes<ListExpr> {
+    let (i, _) = tws0(i)?;
+    map_error(
+        |i| alt((list_group, map(list_member_or, ListExpr::member))).parse(i),
+        || ShExParseError::ExpectedListMember,
+    )(i)
+}
+
+/// From `listMember`: `'(' listOneOf ')'`
+fn list_group(i: Span) -> IRes<ListExpr> {
+    let (i, _) = (char('('), tws0).parse(i)?;
+    let (i, expression) = cut(list_one_of).parse(i)?;
+    let (i, _) = cut(list_group_close).parse(i)?;
+    Ok((i, expression))
+}
+
+/// `listMemberOr ::= listMemberAnd ( 'OR' inlineShapeAnd )*`
+fn list_member_or(i: Span) -> IRes<ShapeExpr> {
+    let (i, first) = list_member_and(i)?;
+    let (i, rest) = many0(preceded(symbol("OR"), inline_shape_and)).parse(i)?;
+    let mut ses = vec![first];
+    ses.extend(rest);
+    Ok((i, make_shape_or(ses)))
+}
+
+/// `listMemberAnd ::= listMemberNot ( 'AND' inlineShapeNot )*`
+fn list_member_and(i: Span) -> IRes<ShapeExpr> {
+    let (i, first) = list_member_not(i)?;
+    let (i, rest) = many0(preceded(symbol("AND"), inline_shape_not)).parse(i)?;
+    let mut ses = vec![first];
+    ses.extend(rest);
+    Ok((i, make_shape_and(ses)))
+}
+
+/// `listMemberNot ::= listMemberAtom | 'NOT' inlineShapeAtom`
+fn list_member_not(i: Span) -> IRes<ShapeExpr> {
+    match opt(symbol("NOT")).parse(i)? {
+        (i, Some(_)) => {
+            let (i, se) = inline_shape_atom()(i)?;
+            Ok((i, ShapeExpr::shape_not(se)))
+        },
+        (i, None) => list_member_atom(i),
+    }
+}
+
+/// `listMemberAtom`: `inlineShapeAtom` without its parenthesised alternative.
+fn list_member_atom(i: Span) -> IRes<ShapeExpr> {
+    alt((
+        list_shape,
+        non_lit_inline_opt_shape_or_ref(),
+        lit_node_constraint_shape_expr(),
+        inline_shape_or_ref_opt_non_lit,
+        dot,
+    ))
+    .parse(i)
 }
 
 fn paren_shape_expr(i: Span) -> IRes<ShapeExpr> {

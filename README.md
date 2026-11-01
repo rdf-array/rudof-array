@@ -5,8 +5,8 @@
 **rdf-array** fork of [rudof](https://github.com/rudof-project/rudof): rudof reads RDF through
 [oxigraph-array](https://github.com/rdf-array/oxigraph-array), so `( 1 2 3 )` in Turtle is one
 sequence term (`oxrdf::Sequence`, rudof's `Object::Sequence`) and `()` the empty sequence. Its ShEx
-engine gains the ShEx-array Collection shape expression `((shapeExpr))[min, max]` in ShExC, ShExJ
-(`{"type": "Collection", …}`) and ShExR (`sx:Collection`), and lists in ShExR schemas and SHACL shapes
+engine gains the ShEx-array LIST shape expression, `LIST ( regex )` and `LIST card x`, in ShExC, ShExJ
+(`{"type": "ListShape", …}`) and ShExR (`sx:ListShape`), and lists in ShExR schemas and SHACL shapes
 graphs are read and written as sequences. Part of the
 [rdf-array](https://github.com/rdf-array/rdf-array) organisation; notes in doc/rdf-array.md.
 

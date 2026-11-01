@@ -728,11 +728,7 @@ impl SchemaIR {
             ShapeExpr::Shape(shape) => self.show_shape(shape, width),
             ShapeExpr::External {} => "EXTERNAL".to_string(),
             ShapeExpr::Ref { idx } => format!("@{}", self.show_idx(idx)),
-            ShapeExpr::Collection { expr, min, max } => format!(
-                "(({}))[{min}, {}]",
-                self.show_shape_idx(expr, width),
-                max.map_or("*".to_string(), |m| m.to_string())
-            ),
+            ShapeExpr::ListShape { expr } => format!("LIST ( {} )", expr.show(&|e| self.show_shape_idx(e, width))),
             ShapeExpr::Empty => "{}".to_string(),
         }
     }

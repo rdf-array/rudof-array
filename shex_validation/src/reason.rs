@@ -55,10 +55,9 @@ pub enum Reason {
         shape_expr: ShapeLabelIdx,
         reasons: Reasons,
     },
-    /// rdf-array: a sequence within the bounds of a Collection shape
-    /// expression, each of whose elements passed it; `reasons` holds the
-    /// elements' reasons in order.
-    Collection {
+    /// rdf-array: a sequence whose members match a LIST shape expression;
+    /// `reasons` holds the members' reasons in order.
+    ListShapeResults {
         node: Node,
         shape_expr: ShapeExpr,
         reasons: Reasons,
@@ -131,7 +130,7 @@ impl Reason {
                 }
                 Ok(())
             },
-            Reason::ShapeOr { reasons, .. } | Reason::Collection { reasons, .. } => {
+            Reason::ShapeOr { reasons, .. } | Reason::ListShapeResults { reasons, .. } => {
                 add_reasons_to_tree(tree, reasons, nodes_prefixmap, schema, width)
             },
             Reason::ShapeNot { errors_evidences, .. } => {
@@ -209,8 +208,8 @@ impl Reason {
                 node.show_qualified(nodes_prefixmap),
                 schema.show_shape_idx(shape_expr, width),
             )),
-            Reason::Collection { node, shape_expr, .. } => Ok(format!(
-                "Collection passed ({}@{})",
+            Reason::ListShapeResults { node, shape_expr, .. } => Ok(format!(
+                "LIST passed ({}@{})",
                 node.show_qualified(nodes_prefixmap),
                 schema.show_shape_expr(shape_expr, width),
             )),
@@ -351,14 +350,11 @@ impl Display for Reason {
                 f,
                 "Shape OR passed. Node {node}, shape: {shape_expr}, reasons: {reasons}"
             ),
-            Reason::Collection {
+            Reason::ListShapeResults {
                 node,
                 shape_expr,
                 reasons,
-            } => write!(
-                f,
-                "Collection passed. Node {node}, shape: {shape_expr}, reasons: {reasons}"
-            ),
+            } => write!(f, "LIST passed. Node {node}, shape: {shape_expr}, reasons: {reasons}"),
             Reason::ShapeNot {
                 node,
                 shape_expr,

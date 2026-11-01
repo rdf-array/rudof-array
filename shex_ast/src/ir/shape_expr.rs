@@ -29,16 +29,108 @@ pub enum ShapeExpr {
     Ref {
         idx: ShapeLabelIdx,
     },
-    /// rdf-array: a sequence of `min` to `max` elements (`None`: unbounded),
-    /// each conforming to the shape expression `expr`.
-    Collection {
-        expr: ShapeLabelIdx,
-        min: usize,
-        max: Option<usize>,
+    /// rdf-array: a sequence whose members, in order, match the regular
+    /// expression `expr`.
+    ListShape {
+        expr: Box<ListExpr>,
     },
 
     #[default]
     Empty,
+}
+
+/// rdf-array: the regular expression of a [`ShapeExpr::ListShape`] over the
+/// shape expressions of its members, each with an index of its own.
+/// `max` of `None` is unbounded; `EachOf` is ordered.
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum ListExpr {
+    Member {
+        expr: ShapeLabelIdx,
+        min: usize,
+        max: Option<usize>,
+    },
+    EachOf {
+        exprs: Vec<ListExpr>,
+        min: usize,
+        max: Option<usize>,
+    },
+    OneOf {
+        exprs: Vec<ListExpr>,
+        min: usize,
+        max: Option<usize>,
+    },
+}
+
+impl ListExpr {
+    pub fn min_max(&self) -> (usize, Option<usize>) {
+        match self {
+            ListExpr::Member { min, max, .. }
+            | ListExpr::EachOf { min, max, .. }
+            | ListExpr::OneOf { min, max, .. } => (*min, *max),
+        }
+    }
+
+    /// The indexes of the members' shape expressions, in order.
+    pub fn members(&self) -> Vec<ShapeLabelIdx> {
+        match self {
+            ListExpr::Member { expr, .. } => vec![*expr],
+            ListExpr::EachOf { exprs, .. } | ListExpr::OneOf { exprs, .. } => {
+                exprs.iter().flat_map(ListExpr::members).collect()
+            },
+        }
+    }
+
+    /// The fewest and the most members a sequence matching this expression can
+    /// have (`None`: unbounded).
+    pub fn length_bounds(&self) -> (usize, Option<usize>) {
+        let (one_min, one_max) = match self {
+            ListExpr::Member { .. } => (1, Some(1)),
+            ListExpr::EachOf { exprs, .. } => exprs.iter().map(ListExpr::length_bounds).fold(
+                (0usize, Some(0usize)),
+                |(acc_min, acc_max), (min, max)| {
+                    (
+                        acc_min.saturating_add(min),
+                        acc_max.zip(max).map(|(a, b)| a.saturating_add(b)),
+                    )
+                },
+            ),
+            ListExpr::OneOf { exprs, .. } => exprs
+                .iter()
+                .map(ListExpr::length_bounds)
+                .reduce(|(acc_min, acc_max), (min, max)| (acc_min.min(min), acc_max.zip(max).map(|(a, b)| a.max(b))))
+                .unwrap_or((0, Some(0))),
+        };
+        let (min, max) = self.min_max();
+        // Repeating an expression that takes no members takes no members.
+        let total_max = match (max, one_max) {
+            (_, Some(0)) | (Some(0), _) => Some(0),
+            (Some(max), Some(one_max)) => Some(max.saturating_mul(one_max)),
+            _ => None,
+        };
+        (min.saturating_mul(one_min), total_max)
+    }
+
+    /// Spells the expression in ShExC, showing a member's shape with `show`.
+    pub fn show(&self, show: &dyn Fn(&ShapeLabelIdx) -> String) -> String {
+        let junction = |exprs: &[ListExpr], sep: &str| {
+            let body = exprs.iter().map(|e| e.show(show)).collect::<Vec<_>>().join(sep);
+            format!("( {body} )")
+        };
+        let (body, (min, max)) = match self {
+            ListExpr::Member { expr, .. } => (show(expr), self.min_max()),
+            ListExpr::EachOf { exprs, .. } => (junction(exprs, " ; "), self.min_max()),
+            ListExpr::OneOf { exprs, .. } => (junction(exprs, " | "), self.min_max()),
+        };
+        match (min, max) {
+            (1, Some(1)) => body,
+            (0, Some(1)) => format!("{body} ?"),
+            (0, None) => format!("{body} *"),
+            (1, None) => format!("{body} +"),
+            (min, Some(max)) if min == max => format!("{body} {{{min}}}"),
+            (min, Some(max)) => format!("{body} {{{min},{max}}}"),
+            (min, None) => format!("{body} {{{min},*}}"),
+        }
+    }
 }
 
 impl ShapeExpr {
@@ -55,7 +147,10 @@ impl ShapeExpr {
             ShapeExpr::Shape(_s) => vec![],
             ShapeExpr::External {} => vec![],
             ShapeExpr::Ref { idx } => vec![*idx],
-            ShapeExpr::Collection { expr, .. } => vec![*expr],
+            // A member is another node, like a triple constraint's value, so a
+            // list refers to its members' shapes no more directly than a shape
+            // does: `<Tree> LIST ( @<Tree> * )` is not a circular reference.
+            ShapeExpr::ListShape { .. } => vec![],
             ShapeExpr::Empty => vec![],
         }
     }
@@ -81,7 +176,7 @@ impl ShapeExpr {
                 let info = schema.find_shape_idx(idx).unwrap();
                 info.expr().get_triple_exprs(schema)
             },
-            ShapeExpr::Collection { .. } => vec![],
+            ShapeExpr::ListShape { .. } => vec![],
             ShapeExpr::Empty => vec![],
         }
     }
@@ -154,9 +249,9 @@ impl ShapeExpr {
                 }
                 map
             },
-            // The elements of a sequence are not neighbours of the node: they are
-            // proved when the collection is checked.
-            ShapeExpr::Collection { .. } => HashMap::new(),
+            // The members of a sequence are not neighbours of the node: they are
+            // proved when the list is checked.
+            ShapeExpr::ListShape { .. } => HashMap::new(),
             ShapeExpr::Empty => HashMap::new(),
         }
     }
@@ -198,7 +293,7 @@ impl ShapeExpr {
             },
             ShapeExpr::External {} => {},
             ShapeExpr::Ref { idx } => visit(idx, &mut preds),
-            ShapeExpr::Collection { .. } => {},
+            ShapeExpr::ListShape { .. } => {},
             ShapeExpr::Empty => {},
         }
         preds
@@ -256,8 +351,12 @@ impl ShapeExpr {
             ShapeExpr::Ref { idx } => {
                 graph.add_edge(source, *idx, pos_neg);
             },
-            ShapeExpr::Collection { expr, .. } => {
-                graph.add_edge(source, *expr, pos_neg);
+            // Unlike a circular reference, stratification does look through a
+            // list: `<S> LIST ( NOT @<S> * )` negates <S> in <S>.
+            ShapeExpr::ListShape { expr } => {
+                for member in expr.members() {
+                    graph.add_edge(source, member, pos_neg);
+                }
             },
             ShapeExpr::Empty => {},
         }
@@ -310,13 +409,7 @@ impl Display for ShapeExpr {
             ShapeExpr::Shape(shape) => write!(f, "{shape}"),
             ShapeExpr::External {} => write!(f, "External"),
             ShapeExpr::Ref { idx } => write!(f, "@{idx}"),
-            ShapeExpr::Collection { expr, min, max } => {
-                write!(f, "(({expr}))[{min}, ")?;
-                match max {
-                    Some(max) => write!(f, "{max}]"),
-                    None => write!(f, "*]"),
-                }
-            },
+            ShapeExpr::ListShape { expr } => write!(f, "LIST ( {} )", expr.show(&|e| format!("{e}"))),
             ShapeExpr::Empty => write!(f, "<Empty>"),
         }
     }

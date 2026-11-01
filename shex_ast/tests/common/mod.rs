@@ -40,7 +40,7 @@ pub fn schemas_dir() -> PathBuf {
     .to_path_buf()
 }
 
-/// rdf-array: the Collection schemas of shexTest-contrib.
+/// rdf-array: the LIST schemas of shexTest-contrib.
 pub fn contrib_schemas_dir() -> PathBuf {
     Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),

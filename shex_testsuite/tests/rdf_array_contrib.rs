@@ -1,8 +1,8 @@
 //! rdf-array: the shared ShEx-array tests of
 //! [shexTest-contrib](https://github.com/rdf-array/shexTest-contrib) (the
-//! `shexTest-contrib` submodule): the Collection shape expression in ShExC,
-//! ShExJ and ShExR, validation over sequence-valued data, and the negative
-//! syntax of its bounds. Every entry must pass; there is no baseline.
+//! `shexTest-contrib` submodule): the LIST shape expression in ShExC, ShExJ
+//! and ShExR, validation over sequence-valued data, and its negative syntax.
+//! Every entry must pass; there is no baseline.
 
 #[cfg(not(target_family = "wasm"))]
 use shex_testsuite::{
@@ -66,7 +66,7 @@ fn contrib_validation_shexr() {
     validation(ManifestShExSyntaxMode::ShExR);
 }
 
-/// Each Collection schema's ShExJ round-trips and equals its ShExC, and its
+/// Each LIST schema's ShExJ round-trips and equals its ShExC, and its
 /// ShExC pretty-prints and parses back to the same schema.
 #[cfg(not(target_family = "wasm"))]
 #[test]

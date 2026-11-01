@@ -3,9 +3,9 @@ use crate::ast::iri_exclusion::IriExclusion;
 use crate::ast::language_exclusion::LanguageExclusion;
 use crate::ast::literal_exclusion::LiteralExclusion;
 use crate::{
-    Annotation, BNode, IriOrStr, IriRefOrWildcard, LangOrWildcard, NodeConstraint, NodeKind, ObjectValue, Schema,
-    SemAct, Shape, ShapeDecl, ShapeExpr, ShapeExprLabel, StringOrWildcard, TripleExpr, TripleExprLabel, ValueSetValue,
-    XsFacet,
+    Annotation, BNode, IriOrStr, IriRefOrWildcard, LangOrWildcard, ListExpr, NodeConstraint, NodeKind, ObjectValue,
+    Schema, SemAct, Shape, ShapeDecl, ShapeExpr, ShapeExprLabel, StringOrWildcard, TripleExpr, TripleExprLabel,
+    ValueSetValue, XsFacet,
 };
 use prefixmap::IriRef;
 use rudof_iri::IriS;
@@ -321,8 +321,11 @@ fn visit_shape_expr(se: &mut ShapeExpr, f: &mut impl FnMut(&mut TripleExpr) -> b
                 visit_shape_expr(&mut se.se, f);
             }
         },
-        ShapeExpr::ShapeNot { shape_expr } | ShapeExpr::Collection { shape_expr, .. } => {
-            visit_shape_expr(&mut shape_expr.se, f)
+        ShapeExpr::ShapeNot { shape_expr } => visit_shape_expr(&mut shape_expr.se, f),
+        ShapeExpr::ListShape { expression } => {
+            for se in expression.member_shape_exprs_mut() {
+                visit_shape_expr(se, f);
+            }
         },
         ShapeExpr::Shape(shape) => {
             if let Some(expression) = &mut shape.expression {
@@ -350,6 +353,55 @@ fn visit_triple_expr(te: &mut TripleExpr, f: &mut impl FnMut(&mut TripleExpr) ->
         },
         TripleExpr::Ref(_) => {},
     }
+}
+
+/// rdf-array: a LIST's regular expression: `sx:Member` with `sx:shapeExpr`,
+/// `sx:ListEachOf` and `sx:ListOneOf` with `sx:expressions ( … )`, all with
+/// optional `sx:min` and `sx:max`.
+fn parse_list_expr<RDF: FocusRDF + 'static>(rdf: &mut RDF) -> Result<ListExpr, RDFError> {
+    use rudof_rdf::rdf_core::parser::rdf_node_parser::constructors::SingleIntegerPropertyParser;
+
+    let node = rdf.get_focus().cloned().ok_or(RDFError::NoFocusNodeError)?;
+    let type_iri = current_type::<RDF>(rdf)?;
+    rdf.set_focus(&node);
+    let min = SingleIntegerPropertyParser::new(ShexRVocab::sx_min())
+        .optional()
+        .parse_focused(rdf)?
+        .map(|n| n as i32);
+    rdf.set_focus(&node);
+    let max = SingleIntegerPropertyParser::new(ShexRVocab::sx_max())
+        .optional()
+        .parse_focused(rdf)?
+        .map(|n| n as i32);
+    rdf.set_focus(&node);
+    let expr = match type_iri.as_deref() {
+        Some(ShexRVocab::SX_MEMBER) => {
+            let se = read_node_property(rdf, ShexRVocab::sx_shape_expr(), parse_shape_expr)?;
+            ListExpr::Member {
+                shape_expr: Box::new(se.into()),
+                min,
+                max,
+            }
+        },
+        Some(ShexRVocab::SX_LIST_EACH_OF) => ListExpr::ListEachOf {
+            expressions: read_list_property(rdf, ShexRVocab::sx_expressions(), parse_list_expr)?.unwrap_or_default(),
+            min,
+            max,
+        },
+        Some(ShexRVocab::SX_LIST_ONE_OF) => ListExpr::ListOneOf {
+            expressions: read_list_property(rdf, ShexRVocab::sx_expressions(), parse_list_expr)?.unwrap_or_default(),
+            min,
+            max,
+        },
+        other => {
+            return Err(to_rdf_err(ShExRError::UnexpectedListExprType {
+                node: node.to_string(),
+                found: other.map(str::to_string),
+            }));
+        },
+    };
+    rdf.set_focus(&node);
+    Ok(expr)
 }
 
 fn parse_shape_decl<RDF: FocusRDF + 'static>(rdf: &mut RDF) -> Result<ShapeDecl, RDFError> {
@@ -389,21 +441,10 @@ fn parse_shape_expr<RDF: FocusRDF + 'static>(rdf: &mut RDF) -> Result<ShapeExpr,
         Some(ShexRVocab::SX_NODE_CONSTRAINT) => parse_node_constraint(rdf).map(ShapeExpr::node_constraint),
         Some(ShexRVocab::SX_SHAPE) => parse_shape(rdf).map(ShapeExpr::shape),
         Some(ShexRVocab::SX_SHAPE_EXTERNAL) => Ok(ShapeExpr::external()),
-        Some(ShexRVocab::SX_COLLECTION) => {
-            use rudof_rdf::rdf_core::parser::rdf_node_parser::constructors::SingleIntegerPropertyParser;
-            let inner = read_node_property(rdf, ShexRVocab::sx_shape_expr(), parse_shape_expr)?;
+        Some(ShexRVocab::SX_LIST_SHAPE) => {
+            let expression = read_node_property(rdf, ShexRVocab::sx_expression(), parse_list_expr)?;
             rdf.set_focus(&node);
-            let min = SingleIntegerPropertyParser::new(ShexRVocab::sx_min())
-                .optional()
-                .parse_focused(rdf)?
-                .map(|n| n as i32);
-            rdf.set_focus(&node);
-            let max = SingleIntegerPropertyParser::new(ShexRVocab::sx_max())
-                .optional()
-                .parse_focused(rdf)?
-                .map(|n| n as i32);
-            rdf.set_focus(&node);
-            Ok(ShapeExpr::collection(inner, min, max))
+            Ok(ShapeExpr::list_shape(expression))
         },
         _ => {
             // Not one of the inline shape-expression constructs (or no

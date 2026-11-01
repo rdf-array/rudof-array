@@ -31,8 +31,11 @@ vocab_term!(ShexRVocab, SX_SHAPE_OR, "ShapeOr");
 vocab_term!(ShexRVocab, SX_TRIPLE_CONSTRAINT, "TripleConstraint");
 vocab_term!(ShexRVocab, SX_WILDCARD, "Wildcard");
 vocab_term!(ShexRVocab, SX_INF, "INF");
-// rdf-array: the Collection shape expression
-vocab_term!(ShexRVocab, SX_COLLECTION, "Collection");
+// rdf-array: the LIST shape expression
+vocab_term!(ShexRVocab, SX_LIST_SHAPE, "ListShape");
+vocab_term!(ShexRVocab, SX_MEMBER, "Member");
+vocab_term!(ShexRVocab, SX_LIST_EACH_OF, "ListEachOf");
+vocab_term!(ShexRVocab, SX_LIST_ONE_OF, "ListOneOf");
 
 // Properties
 vocab_term!(ShexRVocab, SX_ABSTRACT, "abstract");

@@ -143,11 +143,17 @@ pub enum ParseError {
     #[error("Expected rest of cardinality declaration after comma")]
     ExpectedRestRepeatRange,
 
-    #[error("Expected the bounds of a collection: [min], [min, max] or [min, *]")]
-    ExpectedCollectionBounds,
+    #[error("Expected '(', '*', '+', '?' or a {{m,n}} cardinality after LIST")]
+    ExpectedListBody,
 
-    #[error("The minimum of a collection ({min}) is above its maximum ({max})")]
-    CollectionMinAboveMax { min: i32, max: i32 },
+    #[error("Expected a LIST member: a shape expression that does not begin with a parenthesis, or a group")]
+    ExpectedListMember,
+
+    #[error("Expected ')' closing a LIST group")]
+    ExpectedListGroupClose,
+
+    #[error("The minimum of a LIST cardinality ({min}) is above its maximum ({max})")]
+    ListMinAboveMax { min: i32, max: i32 },
 
     #[error("Expected shape expr")]
     ExpectedShapeExpr,

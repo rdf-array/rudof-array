@@ -26,6 +26,19 @@ const BASELINE: &str = "tests/baseline_failing.txt";
 #[cfg(not(target_family = "wasm"))]
 #[test]
 fn validation_regression() {
+    // rdf-array: `8dot5a2b1c_pass-a5b2c1` recurses to a depth that varies from
+    // run to run, and sometimes overflows a test thread's 2 MiB (with or without
+    // sequences), which aborts the whole test.
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(run_validation_regression)
+        .expect("spawn the test thread")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn run_validation_regression() {
     let pkg = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest_path = pkg.join(MANIFEST);
     let config_path = pkg.join(CONFIG);

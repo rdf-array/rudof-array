@@ -10,7 +10,7 @@ use crate::ir::sem_act::SemAct;
 use crate::ir::semantic_action_context::SemanticActionContext;
 use crate::ir::semantic_actions_registry::SemanticActionsRegistry;
 use crate::ir::shape::Shape;
-use crate::ir::shape_expr::ShapeExpr;
+use crate::ir::shape_expr::{ListExpr, ShapeExpr};
 use crate::ir::shape_label::ShapeLabel;
 use crate::ir::test_action_extension::TestActionExtension;
 use crate::ir::value_set::ValueSet;
@@ -371,22 +371,11 @@ impl AST2IR {
                 compiled_schema.replace_shape(idx, not_se.clone());
                 Ok(not_se)
             },
-            ast::ShapeExpr::Collection {
-                shape_expr: sew,
-                min,
-                max,
-            } => {
-                let internal_idx = compiled_schema.new_index(source_iri);
-                let se = self.compile_shape_expr(&sew.se, &internal_idx, compiled_schema, source_iri, base)?;
-                compiled_schema.replace_shape(&internal_idx, se.clone());
-                let (min, max) = cnv_collection_bounds(*min, *max)?;
-                let coll_se = ShapeExpr::Collection {
-                    expr: internal_idx,
-                    min,
-                    max,
-                };
-                compiled_schema.replace_shape(idx, coll_se.clone());
-                Ok(coll_se)
+            ast::ShapeExpr::ListShape { expression } => {
+                let expr = self.compile_list_expr(expression, compiled_schema, source_iri, base)?;
+                let list_se = ShapeExpr::ListShape { expr: Box::new(expr) };
+                compiled_schema.replace_shape(idx, list_se.clone());
+                Ok(list_se)
             },
             ast::ShapeExpr::Shape(shape) => {
                 let new_extra = self.cnv_extra(&shape.extra, &compiled_schema.prefixmap())?;
@@ -770,11 +759,11 @@ impl AST2IR {
                     trace!("Returning NOT cond with idx {idx_not}");
                     Ok((mk_cond_ref(idx_not), display))
                 },
-                ast::ShapeExpr::Collection { .. } => {
-                    let idx_coll = compiled_schema.new_index(source_iri);
-                    let coll_se = self.compile_shape_expr(se, &idx_coll, compiled_schema, source_iri, base)?;
-                    compiled_schema.replace_shape(&idx_coll, coll_se.clone());
-                    Ok((mk_cond_ref(idx_coll), format!("{coll_se}")))
+                ast::ShapeExpr::ListShape { .. } => {
+                    let idx_list = compiled_schema.new_index(source_iri);
+                    let list_se = self.compile_shape_expr(se, &idx_list, compiled_schema, source_iri, base)?;
+                    compiled_schema.replace_shape(&idx_list, list_se.clone());
+                    Ok((mk_cond_ref(idx_list), format!("{list_se}")))
                 },
                 ast::ShapeExpr::External => {
                     let idx_ext = compiled_schema.new_index(source_iri);
@@ -859,6 +848,45 @@ impl AST2IR {
         Ok(())
     }
 
+    /// rdf-array: compiles a LIST's regular expression; each member's shape
+    /// expression gets an index of its own, as a component of `NOT` does.
+    fn compile_list_expr(
+        &self,
+        expr: &ast::ListExpr,
+        compiled_schema: &mut SchemaIR,
+        source_iri: &IriS,
+        base: &Option<IriS>,
+    ) -> CResult<ListExpr> {
+        let (min, max) = expr.min_max();
+        let (min, max) = cnv_list_cardinality(min, max)?;
+        match expr {
+            ast::ListExpr::Member { shape_expr, .. } => {
+                let member_idx = compiled_schema.new_index(source_iri);
+                let se = self.compile_shape_expr(&shape_expr.se, &member_idx, compiled_schema, source_iri, base)?;
+                compiled_schema.replace_shape(&member_idx, se);
+                Ok(ListExpr::Member {
+                    expr: member_idx,
+                    min,
+                    max,
+                })
+            },
+            ast::ListExpr::ListEachOf { expressions, .. } => {
+                let mut exprs = Vec::with_capacity(expressions.len());
+                for e in expressions {
+                    exprs.push(self.compile_list_expr(e, compiled_schema, source_iri, base)?);
+                }
+                Ok(ListExpr::EachOf { exprs, min, max })
+            },
+            ast::ListExpr::ListOneOf { expressions, .. } => {
+                let mut exprs = Vec::with_capacity(expressions.len());
+                for e in expressions {
+                    exprs.push(self.compile_list_expr(e, compiled_schema, source_iri, base)?);
+                }
+                Ok(ListExpr::OneOf { exprs, min, max })
+            },
+        }
+    }
+
     fn collect_triple_expr_labels_shape_expr(&mut self, shape_expr: &ast::ShapeExpr) -> CResult<()> {
         match shape_expr {
             ast::ShapeExpr::ShapeOr { shape_exprs } | ast::ShapeExpr::ShapeAnd { shape_exprs } => {
@@ -867,8 +895,12 @@ impl AST2IR {
                 }
                 Ok(())
             },
-            ast::ShapeExpr::ShapeNot { shape_expr } | ast::ShapeExpr::Collection { shape_expr, .. } => {
-                self.collect_triple_expr_labels_shape_expr(&shape_expr.se)
+            ast::ShapeExpr::ShapeNot { shape_expr } => self.collect_triple_expr_labels_shape_expr(&shape_expr.se),
+            ast::ShapeExpr::ListShape { expression } => {
+                for se in expression.member_shape_exprs() {
+                    self.collect_triple_expr_labels_shape_expr(se)?;
+                }
+                Ok(())
             },
             ast::ShapeExpr::Shape(shape) => {
                 if let Some(expr) = shape.triple_expr() {
@@ -1499,28 +1531,28 @@ where
     Err(errors)
 }
 
-/// rdf-array: the bounds of a Collection shape expression; absent means 0 and
-/// unbounded, and a negative maximum (-1, written `*`) is unbounded too.
-fn cnv_collection_bounds(min: Option<i32>, max: Option<i32>) -> CResult<(usize, Option<usize>)> {
+/// rdf-array: the cardinality of a LIST's member or group; absent means 1 and a
+/// negative maximum (-1, written `*`) is unbounded.
+fn cnv_list_cardinality(min: Option<i32>, max: Option<i32>) -> CResult<(usize, Option<usize>)> {
     let min = match min {
-        None => 0,
+        None => 1,
         Some(m) if m >= 0 => m as usize,
         Some(m) => {
             return Err(Box::new(SchemaIRError::Internal {
-                msg: format!("Collection minimum must not be negative: {m}"),
+                msg: format!("LIST minimum must not be negative: {m}"),
             }));
         },
     };
     let max = match max {
+        None => Some(1),
         Some(m) if m >= 0 => Some(m as usize),
-        _ => None,
+        Some(_) => None,
     };
-    if max.is_some_and(|max| min > max) {
+    if let Some(max) = max
+        && min > max
+    {
         return Err(Box::new(SchemaIRError::Internal {
-            msg: format!(
-                "Collection minimum {min} is above its maximum {}",
-                max.unwrap_or_default()
-            ),
+            msg: format!("LIST minimum {min} is above its maximum {max}"),
         }));
     }
     Ok((min, max))

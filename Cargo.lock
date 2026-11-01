@@ -3112,7 +3112,7 @@ dependencies = [
 [[package]]
 name = "oxigraph"
 version = "0.5.13"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "dashmap",
  "getrandom 0.3.4",
@@ -3160,7 +3160,7 @@ dependencies = [
 [[package]]
 name = "oxjsonld"
 version = "0.2.7"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "json-event-parser",
  "oxiri 0.2.11",
@@ -3172,7 +3172,7 @@ dependencies = [
 [[package]]
 name = "oxrdf"
 version = "0.3.5"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "hex",
  "oxilangtag",
@@ -3186,7 +3186,7 @@ dependencies = [
 [[package]]
 name = "oxrdfio"
 version = "0.2.7"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "oxjsonld",
  "oxrdf",
@@ -3198,7 +3198,7 @@ dependencies = [
 [[package]]
 name = "oxrdfxml"
 version = "0.2.5"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "oxilangtag",
  "oxiri 0.2.11",
@@ -3210,7 +3210,7 @@ dependencies = [
 [[package]]
 name = "oxsdatatypes"
 version = "0.2.4"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "js-sys",
  "thiserror 1.0.69",
@@ -3219,7 +3219,7 @@ dependencies = [
 [[package]]
 name = "oxttl"
 version = "0.2.5"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "memchr",
  "oxilangtag",
@@ -5297,7 +5297,7 @@ dependencies = [
 [[package]]
 name = "sparesults"
 version = "0.3.5"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "json-event-parser",
  "memchr",
@@ -5309,7 +5309,7 @@ dependencies = [
 [[package]]
 name = "spareval"
 version = "0.2.9"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "hex",
  "json-event-parser",
@@ -5331,7 +5331,7 @@ dependencies = [
 [[package]]
 name = "spargebra"
 version = "0.4.8"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "oxilangtag",
  "oxiri 0.2.11",
@@ -5344,7 +5344,7 @@ dependencies = [
 [[package]]
 name = "sparopt"
 version = "0.3.9"
-source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#128e703d4f8a5387ee459206fcd9314c0bd0fe06"
+source = "git+https://github.com/rdf-array/oxigraph-array?branch=rdf-sequences#f94f121b608e5274fcb155450f6161ca72f777f1"
 dependencies = [
  "oxrdf",
  "rand 0.8.8",

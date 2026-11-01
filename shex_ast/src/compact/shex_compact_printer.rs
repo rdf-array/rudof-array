@@ -2,10 +2,11 @@
 use crate::{
     IriOrStr,
     ast::{
-        Annotation, BNode, LangOrWildcard, NodeConstraint, NodeKind, NumericFacet, ObjectValue, Pattern, Schema,
-        SemAct, Shape, ShapeDecl, ShapeExpr, ShapeExprLabel, StringFacet, TripleExpr, TripleExprLabel, XsFacet,
-        iri_exclusion::IriExclusion, iri_ref_or_wildcard::IriRefOrWildcard, language_exclusion::LanguageExclusion,
-        literal_exclusion::LiteralExclusion, string_or_wildcard::StringOrWildcard, value_set_value::ValueSetValue,
+        Annotation, BNode, LangOrWildcard, ListExpr, NodeConstraint, NodeKind, NumericFacet, ObjectValue, Pattern,
+        Schema, SemAct, Shape, ShapeDecl, ShapeExpr, ShapeExprLabel, ShapeExprWrapper, StringFacet, TripleExpr,
+        TripleExprLabel, XsFacet, iri_exclusion::IriExclusion, iri_ref_or_wildcard::IriRefOrWildcard,
+        language_exclusion::LanguageExclusion, literal_exclusion::LiteralExclusion,
+        string_or_wildcard::StringOrWildcard, value_set_value::ValueSetValue,
     },
 };
 use colored::*;
@@ -340,17 +341,117 @@ where
             ShapeExpr::Shape(s) => self.pp_shape(s),
             ShapeExpr::NodeConstraint(nc) => self.pp_node_constraint(nc),
             ShapeExpr::External => self.pp_external(),
-            ShapeExpr::Collection { shape_expr, min, max } => self
-                .doc
-                .text("((")
-                .append(self.pp_shape_expr(&shape_expr.se))
-                .append(self.doc.text("))"))
-                .append(self.doc.text(collection_bounds(*min, *max))),
+            ShapeExpr::ListShape { expression } => self.pp_list_shape(expression),
             ShapeExpr::ShapeAnd { .. } | ShapeExpr::ShapeOr { .. } | ShapeExpr::ShapeNot { .. } => self
                 .doc
                 .text("(")
                 .append(self.pp_shape_expr(se))
                 .append(self.doc.text(")")),
+        }
+    }
+
+    /// rdf-array: renders a `listShape`: `LIST card x` for one member with a
+    /// cardinality, the shortest spelling that reads back the same, else
+    /// `LIST ( regex )`.
+    fn pp_list_shape(&self, expression: &ListExpr) -> DocBuilder<'a, Arena<'a, A>, A> {
+        match expression {
+            ListExpr::Member { shape_expr, min, max } if min.is_some() || max.is_some() => self
+                .keyword("LIST ")
+                .append(self.doc.text(list_cardinality(*min, *max)))
+                .append(self.doc.text(" "))
+                .append(self.pp_list_atom(&shape_expr.se)),
+            _ => self
+                .keyword("LIST ( ")
+                .append(self.pp_list_expr(expression, 0))
+                .append(self.doc.text(" )")),
+        }
+    }
+
+    /// rdf-array: renders a LIST's regular expression. `parent_prec` is 0
+    /// directly under `LIST ( )`, 1 in a `ListOneOf` and 2 in a `ListEachOf`; a
+    /// group is parenthesised when it has a cardinality or sits in a group that
+    /// binds as tightly, so that the nesting reads back as written.
+    fn pp_list_expr(&self, expression: &ListExpr, parent_prec: u8) -> DocBuilder<'a, Arena<'a, A>, A> {
+        let (min, max) = expression.min_max();
+        let has_cardinality = min.is_some() || max.is_some();
+        let body = match expression {
+            ListExpr::Member { shape_expr, .. } => self.pp_list_member(&shape_expr.se),
+            ListExpr::ListEachOf { expressions, .. } => {
+                self.pp_list_group(expressions, 2, " ; ", has_cardinality || parent_prec >= 2)
+            },
+            ListExpr::ListOneOf { expressions, .. } => {
+                self.pp_list_group(expressions, 1, " | ", has_cardinality || parent_prec >= 1)
+            },
+        };
+        if has_cardinality {
+            body.append(self.doc.text(" "))
+                .append(self.doc.text(list_cardinality(min, max)))
+        } else {
+            body
+        }
+    }
+
+    fn pp_list_group(
+        &self,
+        expressions: &[ListExpr],
+        prec: u8,
+        separator: &'static str,
+        parens: bool,
+    ) -> DocBuilder<'a, Arena<'a, A>, A> {
+        let docs: Vec<_> = expressions.iter().map(|e| self.pp_list_expr(e, prec)).collect();
+        let body = self.doc.intersperse(docs, self.doc.text(separator));
+        if parens || expressions.len() == 1 {
+            self.doc.text("( ").append(body).append(self.doc.text(" )"))
+        } else {
+            body
+        }
+    }
+
+    /// rdf-array: renders a member's atom after `LIST card`, where a parenthesis
+    /// may stand; the empty shape is `.`.
+    fn pp_list_atom(&self, se: &ShapeExpr) -> DocBuilder<'a, Arena<'a, A>, A> {
+        if *se == ShapeExpr::any() {
+            self.doc.text(".")
+        } else {
+            self.pp_shape_expr_atom(se)
+        }
+    }
+
+    /// rdf-array: renders a member inside `LIST ( )`, where `(` opens a group, so
+    /// its first atom may not be parenthesised. An AND or OR whose first operand
+    /// would be has its operands rotated to start with one that would not; when
+    /// every operand would be, the member is written `. AND ( … )`, which means
+    /// the same.
+    fn pp_list_member(&self, se: &ShapeExpr) -> DocBuilder<'a, Arena<'a, A>, A> {
+        if *se == ShapeExpr::any() {
+            return self.doc.text(".");
+        }
+        if !starts_with_paren(se) {
+            return self.pp_shape_expr(se);
+        }
+        let rotated = |sews: &[ShapeExprWrapper], parenthesised: fn(&ShapeExpr) -> bool| {
+            let first = sews.iter().position(|sew| !parenthesised(&sew.se))?;
+            let mut ses = vec![sews[first].se.clone()];
+            ses.extend(
+                sews.iter()
+                    .enumerate()
+                    .filter(|(pos, _)| *pos != first)
+                    .map(|(_, sew)| sew.se.clone()),
+            );
+            Some(ses)
+        };
+        let rotation = match se {
+            ShapeExpr::ShapeAnd { shape_exprs } => rotated(shape_exprs, atom_starts_with_paren).map(ShapeExpr::and),
+            ShapeExpr::ShapeOr { shape_exprs } => rotated(shape_exprs, and_starts_with_paren).map(ShapeExpr::or),
+            _ => None,
+        };
+        match rotation {
+            Some(rotated) => self.pp_shape_expr(&rotated),
+            None => self
+                .doc
+                .text(". ")
+                .append(self.keyword("AND "))
+                .append(self.pp_shape_expr_atom(se)),
         }
     }
 
@@ -1183,20 +1284,41 @@ where
     }
 }
 
-/// rdf-array: the bounds of a Collection shape expression in ShExC: nothing for
-/// the default (any length), `[m]` for exactly m elements, `[m, *]` and `[m, n]`.
-fn collection_bounds(min: Option<i32>, max: Option<i32>) -> String {
+/// rdf-array: the cardinality of a LIST's member or group in ShExC; an absent
+/// bound is 1.
+fn list_cardinality(min: Option<i32>, max: Option<i32>) -> String {
+    let min = min.unwrap_or(1);
+    let max = max.unwrap_or(1);
     match (min, max) {
-        (None, None) => String::new(),
-        (min, max) => {
-            let min = min.unwrap_or(0);
-            match max {
-                Some(max) if max == min => format!("[{min}]"),
-                Some(max) if max >= 0 => format!("[{min}, {max}]"),
-                _ => format!("[{min}, *]"),
-            }
-        },
+        (0, 1) => "?".to_string(),
+        (0, -1) => "*".to_string(),
+        (1, -1) => "+".to_string(),
+        (min, -1) => format!("{{{min},*}}"),
+        (min, max) if min == max => format!("{{{min}}}"),
+        (min, max) => format!("{{{min},{max}}}"),
     }
+}
+
+/// rdf-array: whether the printer's `shapeExpression` for `se` begins with a
+/// parenthesis.
+fn starts_with_paren(se: &ShapeExpr) -> bool {
+    match se {
+        ShapeExpr::ShapeOr { shape_exprs } => shape_exprs.first().is_some_and(|sew| and_starts_with_paren(&sew.se)),
+        other => and_starts_with_paren(other),
+    }
+}
+
+/// As [`starts_with_paren`], for an operand of an OR.
+fn and_starts_with_paren(se: &ShapeExpr) -> bool {
+    match se {
+        ShapeExpr::ShapeAnd { shape_exprs } => shape_exprs.first().is_some_and(|sew| atom_starts_with_paren(&sew.se)),
+        other => atom_starts_with_paren(other),
+    }
+}
+
+/// As [`starts_with_paren`], for an operand of an AND.
+fn atom_starts_with_paren(se: &ShapeExpr) -> bool {
+    matches!(se, ShapeExpr::ShapeAnd { .. } | ShapeExpr::ShapeOr { .. })
 }
 
 #[cfg(test)]
@@ -1241,17 +1363,84 @@ mod tests {
         assert_eq!(schema, reparsed);
     }
 
-    #[test]
-    fn collections_are_printed_and_roundtrip() {
+    fn print_list_schema(body: &str) -> String {
         use crate::compact::ShExParser;
-        let src = "PREFIX : <http://a.example/>\nPREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n\
-                   :S { :rgb ((xsd:integer))[3] ; :pts ((((xsd:decimal))[2]))[3, *] ; :any ((.)) ; :few ((IRI))[0, 2] }";
-        let schema = ShExParser::parse(src, None, &iri!("http://default/")).unwrap();
+        let src = format!("PREFIX : <http://a.example/>\nPREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n{body}");
+        let schema = ShExParser::parse(&src, None, &iri!("http://default/")).unwrap();
         let printed = ShExFormatter::default().without_colors().format_schema(&schema);
-        assert!(printed.contains("))[3]"), "{printed}");
-        assert!(printed.contains("))[2]))[3, *]"), "{printed}");
-        assert!(printed.contains("))[0, 2]"), "{printed}");
-        let reparsed = ShExParser::parse(&printed, None, &iri!("http://default/")).unwrap();
-        assert_eq!(schema, reparsed);
+        let reparsed = ShExParser::parse(&printed, None, &iri!("http://default/"))
+            .unwrap_or_else(|e| panic!("{printed} does not parse back: {e}"));
+        assert_eq!(schema, reparsed, "{printed}");
+        printed
+    }
+
+    #[test]
+    fn lists_are_printed_and_roundtrip() {
+        let printed = print_list_schema(
+            ":S { :rgb LIST {3} xsd:integer ; :pts LIST {3,} LIST {2} xsd:decimal ; :any LIST * . ; \
+             :few LIST {0,2} IRI ; :one LIST ( IRI ) ; :card LIST + IRI {1,2} }",
+        );
+        assert!(printed.contains("LIST {3} xsd:integer"), "{printed}");
+        assert!(printed.contains("LIST {3,*} LIST {2} xsd:decimal"), "{printed}");
+        assert!(printed.contains("LIST * ."), "{printed}");
+        assert!(printed.contains("LIST {0,2} IRI"), "{printed}");
+        assert!(printed.contains("LIST ( IRI )"), "{printed}");
+
+        let printed = print_list_schema(":S LIST ( ( xsd:string ; xsd:integer ) * )");
+        assert!(printed.contains("LIST ( ( xsd:string ; xsd:integer ) * )"), "{printed}");
+        let printed = print_list_schema(":S LIST ( IRI ; LITERAL | BNODE ; ( IRI | LITERAL ) )");
+        assert!(
+            printed.contains("LIST ( IRI ; LITERAL | BNODE ; ( IRI | LITERAL ) )"),
+            "{printed}"
+        );
+
+        for body in [
+            ":S LIST ( ( IRI {2} ) {3} )",
+            ":S LIST ( IRI ; ( LITERAL ; BNODE ) )",
+            ":S LIST ( IRI | ( LITERAL | BNODE ) )",
+            ":S LIST ( ( IRI ; LITERAL ) ? ; LIST ( . + ) {2,} )",
+            ":S LIST ( @:S * )",
+            ":S LIST ( NOT IRI ; NOT ( IRI OR LITERAL ) )",
+            ":S LIST * ( NOT xsd:integer )",
+            ":S LIST + ( IRI OR LITERAL )",
+            ":S LIST ( IRI OR LITERAL ; IRI AND @:S )",
+        ] {
+            print_list_schema(body);
+        }
+    }
+
+    /// Inside `LIST ( )`, `(` opens a group, so a member that would begin with a
+    /// parenthesis is rotated or guarded by `.`. Such a member comes only from
+    /// ShExJ or ShExR.
+    #[test]
+    fn list_members_never_begin_with_a_parenthesis() {
+        use crate::ast::ListExpr;
+        use crate::compact::ShExParser;
+        let (a, b, c, d) = (
+            ShapeExpr::iri_ref(IriRef::iri(iri!("http://a.example/A"))),
+            ShapeExpr::iri_ref(IriRef::iri(iri!("http://a.example/B"))),
+            ShapeExpr::iri_ref(IriRef::iri(iri!("http://a.example/C"))),
+            ShapeExpr::iri_ref(IriRef::iri(iri!("http://a.example/D"))),
+        );
+        let or_ab = ShapeExpr::or(vec![a.clone(), b.clone()]);
+        let or_cd = ShapeExpr::or(vec![c.clone(), d]);
+        for (member, expected) in [
+            (ShapeExpr::and(vec![or_ab.clone(), c]), "@<http://a.example/C> AND ("),
+            (ShapeExpr::and(vec![or_ab.clone(), or_cd.clone()]), ". AND ("),
+            (ShapeExpr::or(vec![or_ab, or_cd]), ". AND ("),
+        ] {
+            // Two members, so that this is not the `LIST card x` form
+            let list = ShapeExpr::list_shape(ListExpr::ListEachOf {
+                expressions: vec![ListExpr::member(member), ListExpr::member(a.clone())],
+                min: None,
+                max: None,
+            });
+            let mut schema = Schema::new(&iri!("http://default/"));
+            schema.add_shape(ShapeExprLabel::iri(iri!("http://a.example/S")), list, false);
+            let printed = ShExFormatter::default().without_colors().format_schema(&schema);
+            assert!(printed.contains(expected), "{printed}");
+            ShExParser::parse(&printed, None, &iri!("http://default/"))
+                .unwrap_or_else(|e| panic!("{printed} does not parse back: {e}"));
+        }
     }
 }

@@ -295,8 +295,11 @@ fn visit_shape_expr(se: &ShapeExpr, f: &mut impl FnMut(Item)) {
                 visit_shape_expr(&se.se, f);
             }
         },
-        ShapeExpr::ShapeNot { shape_expr } | ShapeExpr::Collection { shape_expr, .. } => {
-            visit_shape_expr(&shape_expr.se, f)
+        ShapeExpr::ShapeNot { shape_expr } => visit_shape_expr(&shape_expr.se, f),
+        ShapeExpr::ListShape { expression } => {
+            for se in expression.member_shape_exprs() {
+                visit_shape_expr(se, f);
+            }
         },
         ShapeExpr::NodeConstraint(nc) => f(Item::NodeConstraint(nc)),
         ShapeExpr::Shape(shape) => {
@@ -373,53 +376,130 @@ mod tests {
         assert_eq!(nc.sem_acts().map(|sas| sas.len()), Some(1));
     }
 
-    fn collection_value(body: &str) -> std::result::Result<ShapeExpr, String> {
-        let str = format!("prefix : <http://a.example/>\nprefix xsd: <http://www.w3.org/2001/XMLSchema#>\n:S {body}\n");
+    fn list_value(body: &str) -> std::result::Result<ShapeExpr, String> {
+        let str = format!(
+            "prefix : <http://a.example/>\nprefix xsd: <http://www.w3.org/2001/XMLSchema#>\nprefix list: <http://l.example/>\n:S {body}\n"
+        );
         let schema = ShExParser::parse(&str, None, &iri!("http://default/")).map_err(|e| e.to_string())?;
         Ok(schema.shapes().unwrap()[0].shape_expr.clone())
     }
 
-    #[test]
-    fn test_collection_shape_expressions() {
-        // rdf-array: ((shapeExpr))[min, max]
-        let bounds = |se: ShapeExpr| match se {
-            ShapeExpr::Collection { min, max, .. } => (min, max),
-            other => panic!("expected a collection, found {other:?}"),
+    /// The JSON of a parsed list's `expression`, with shape expressions short.
+    fn list_json(body: &str) -> String {
+        let ShapeExpr::ListShape { expression } = list_value(body).unwrap() else {
+            panic!("{body} is not a list");
         };
-        assert_eq!(bounds(collection_value("((xsd:integer))").unwrap()), (None, None));
+        serde_json::to_string(&expression)
+            .unwrap()
+            .replace(r#"{"type":"NodeConstraint","nodeKind":"iri"}"#, "IRI")
+            .replace(r#"{"type":"NodeConstraint","nodeKind":"literal"}"#, "LITERAL")
+            .replace(r#""type":"#, "")
+    }
+
+    #[test]
+    fn test_list_shape_expressions() {
+        // Both forms give the same expression
+        assert_eq!(list_json("LIST * IRI"), list_json("LIST ( IRI * )"));
         assert_eq!(
-            bounds(collection_value("((xsd:integer))[3]").unwrap()),
-            (Some(3), Some(3))
+            list_json("list + IRI"),
+            r#"{"Member","shapeExpr":IRI,"min":1,"max":-1}"#
         );
-        assert_eq!(bounds(collection_value("((IRI))[1, *]").unwrap()), (Some(1), Some(-1)));
-        assert_eq!(bounds(collection_value("((IRI))[1,]").unwrap()), (Some(1), Some(-1)));
+        assert_eq!(list_json("LIST ? IRI"), r#"{"Member","shapeExpr":IRI,"min":0,"max":1}"#);
         assert_eq!(
-            bounds(collection_value("( ( . ) ) [ 0 , 2 ]").unwrap()),
-            (Some(0), Some(2))
+            list_json("LIST {3} IRI"),
+            r#"{"Member","shapeExpr":IRI,"min":3,"max":3}"#
         );
         assert_eq!(
-            bounds(collection_value("((((xsd:decimal))[2]))[3, *]").unwrap()),
-            (Some(3), Some(-1))
+            list_json("LIST {3,} IRI"),
+            r#"{"Member","shapeExpr":IRI,"min":3,"max":-1}"#
         );
+        assert_eq!(
+            list_json("LIST {3,*} IRI"),
+            r#"{"Member","shapeExpr":IRI,"min":3,"max":-1}"#
+        );
+        assert_eq!(
+            list_json("LIST {2,3} ( IRI )"),
+            r#"{"Member","shapeExpr":IRI,"min":2,"max":3}"#
+        );
+        assert_eq!(list_json("LIST ( IRI )"), r#"{"Member","shapeExpr":IRI}"#);
+        // `;` binds tighter than `|`, and a group's nesting is kept
+        assert_eq!(
+            list_json("LIST ( IRI ; LITERAL | IRI )"),
+            r#"{"ListOneOf","expressions":[{"ListEachOf","expressions":[{"Member","shapeExpr":IRI},{"Member","shapeExpr":LITERAL}]},{"Member","shapeExpr":IRI}]}"#
+        );
+        assert_eq!(
+            list_json("LIST ( IRI ; ( LITERAL ; IRI ) )"),
+            r#"{"ListEachOf","expressions":[{"Member","shapeExpr":IRI},{"ListEachOf","expressions":[{"Member","shapeExpr":LITERAL},{"Member","shapeExpr":IRI}]}]}"#
+        );
+        // A group of one is its expression; a second cardinality wraps it
+        assert_eq!(
+            list_json("LIST ( ( IRI ) {3} )"),
+            r#"{"Member","shapeExpr":IRI,"min":3,"max":3}"#
+        );
+        assert_eq!(
+            list_json("LIST ( ( IRI {2} ) {3} )"),
+            r#"{"ListEachOf","expressions":[{"Member","shapeExpr":IRI,"min":2,"max":2}],"min":3,"max":3}"#
+        );
+        assert_eq!(
+            list_json("LIST ( ( IRI ; LITERAL ) * )"),
+            r#"{"ListEachOf","expressions":[{"Member","shapeExpr":IRI},{"Member","shapeExpr":LITERAL}],"min":0,"max":-1}"#
+        );
+
+        // A LIST is an atom wherever one stands
         assert!(matches!(
-            collection_value("NOT ((LITERAL))").unwrap(),
+            list_value("NOT LIST * IRI").unwrap(),
             ShapeExpr::ShapeNot { .. }
         ));
-        // `((x) OR y)` is a parenthesised OR, not a collection
         assert!(matches!(
-            collection_value("((IRI) OR LITERAL)").unwrap(),
+            list_value("LIST * IRI OR LIST + LITERAL").unwrap(),
             ShapeExpr::ShapeOr { .. }
         ));
-        for bad in [
-            "((.))[]",
-            "((.))[1 2]",
-            "((.))[,1]",
-            "((.))[*]",
-            "((.))[1, 2, 3]",
-            "((.))[1",
-            "((.))[3, 1]",
+        // Members: only the first atom loses its parentheses
+        for good in [
+            "LIST ( @:B AND ( @:A OR @:C ) )",
+            "LIST ( NOT ( @:A OR @:C ) ; IRI )",
+            "LIST ( . * ; LIST ( xsd:integer {3} ) {2} )",
+            "LIST ( { :p . } + ; IRI { :p . } )",
+            "LIST ( list:x ; xsd:integer MININCLUSIVE 0 )",
+            "{ :p LIST ( @:C + ) {1,2} ; :q LIST + @:C {1,2} ; :r LIST + . * }",
         ] {
-            assert!(collection_value(bad).is_err(), "{bad} should not parse");
+            assert!(list_value(good).is_ok(), "{good} should parse: {:?}", list_value(good));
+        }
+        // `list:x` is still a prefixed name, not the keyword
+        assert!(matches!(list_value("list:x").unwrap(), ShapeExpr::NodeConstraint(_)));
+
+        for bad in [
+            // A bare LIST, and an empty one
+            "LIST xsd:integer",
+            "LIST IRI",
+            "LIST @:T",
+            "LIST ( )",
+            "LIST",
+            // A member may not begin with a parenthesis
+            "LIST ( ( @:A ) AND @:B )",
+            "LIST ( ( @:A ) OR @:B )",
+            // Separators and groups
+            "LIST ( IRI , LITERAL )",
+            "LIST ( IRI LITERAL )",
+            "LIST ( IRI ; )",
+            "LIST ( ; IRI )",
+            "LIST ( IRI | )",
+            "LIST ( IRI",
+            "LIST ( ( IRI )",
+            // Cardinalities
+            "LIST {3,1} IRI",
+            "LIST ( IRI {3,1} )",
+            "LIST ( IRI * * )",
+            "LIST * ",
+            // After EXTENDS
+            "EXTENDS LIST + @:T { :p . }",
+            // The old Collection syntax
+            "((xsd:integer))[3]",
+            "((IRI))[1, *]",
+            "((IRI))[1,]",
+            "{ :p ((.))[0, 2] }",
+        ] {
+            assert!(list_value(bad).is_err(), "{bad} should not parse");
         }
     }
 

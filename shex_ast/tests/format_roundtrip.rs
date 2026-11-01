@@ -208,7 +208,7 @@ fn shextest_schemas_round_trip_between_formats() {
     round_trip_between_formats(&dir, &entries, &UPSTREAM_DRIFT);
 }
 
-/// rdf-array: the Collection shape expression survives every round trip.
+/// rdf-array: the LIST shape expression survives every round trip.
 #[test]
 fn contrib_schemas_round_trip_between_formats() {
     let dir = contrib_schemas_dir();

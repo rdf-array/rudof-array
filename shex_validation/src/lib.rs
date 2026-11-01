@@ -5,6 +5,7 @@ pub mod atom;
 pub mod class_partitions;
 pub mod engine;
 pub mod k_partitions;
+mod list_matcher;
 pub mod no_match_reason;
 pub mod partition;
 pub mod reason;

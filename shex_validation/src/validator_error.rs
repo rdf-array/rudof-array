@@ -195,29 +195,44 @@ pub enum ValidatorError {
         reasons: Reasons,
     },
 
-    /// rdf-array: a Collection shape expression was checked against a node
-    /// that is not a sequence.
-    #[error("Collection error: node {node} is not a sequence, as {shape_expr} requires")]
+    /// rdf-array: a node does not match a LIST shape expression; `errors` holds
+    /// a [`Self::SequenceExpected`], a [`Self::ListLengthViolation`] or a
+    /// [`Self::ListMemberFailure`].
+    #[error("LIST error: node {node} does not match {shape_expr}: {errors}")]
+    ListShapeFailure {
+        shape_expr: Box<ShapeExpr>,
+        node: Box<Node>,
+        errors: ValidatorErrors,
+    },
+
+    /// rdf-array: a LIST shape expression was checked against a node that is
+    /// not a sequence.
+    #[error("LIST error: node {node} is not a sequence, as {shape_expr} requires")]
     SequenceExpected {
         shape_expr: Box<ShapeExpr>,
         node: Box<Node>,
     },
 
-    /// rdf-array: a sequence whose length is outside a Collection's bounds.
-    #[error("Collection error: sequence {node} has {length} elements, outside the bounds of {shape_expr}")]
-    CollectionLengthViolation {
+    /// rdf-array: every member of a sequence passed what was tried on it, but
+    /// the members ran out, or were left over, before the LIST's expression
+    /// could finish; `min` and `max` (`None`: unbounded) are the expression's
+    /// length bounds.
+    #[error("LIST error: sequence {node} of {length} members does not match {shape_expr}, which takes {min} to {} members", max.map_or("any number of".to_string(), |m| m.to_string()))]
+    ListLengthViolation {
         shape_expr: Box<ShapeExpr>,
         node: Box<Node>,
         length: usize,
+        min: usize,
+        max: Option<usize>,
     },
 
-    /// rdf-array: the element at `index` (1-based) of a sequence does not
-    /// conform to the Collection's shape expression.
-    #[error("Collection error: element {index} ({element}) of sequence {node} failed: {errors}")]
-    CollectionElementFailure {
+    /// rdf-array: the member at `index` (1-based) of a sequence is the first
+    /// that passes none of the LIST's member shapes tried on it.
+    #[error("LIST error: member {index} ({member}) of sequence {node} failed: {errors}")]
+    ListMemberFailure {
         node: Box<Node>,
         index: usize,
-        element: Box<Node>,
+        member: Box<Node>,
         errors: ValidatorErrors,
     },
 
@@ -322,25 +337,33 @@ impl ValidatorError {
         let show_idx = |idx: &ShapeLabelIdx| Self::show_idx(idx, schema);
 
         let s = match self {
-            ValidatorError::SequenceExpected { node, shape_expr } => format!(
-                "Collection {}: node {} is not a sequence",
+            ValidatorError::ListShapeFailure { node, shape_expr, .. } => format!(
+                "{}: node {} does not match",
                 show_shape_expr(shape_expr, schema, width),
                 show_node(node)
             ),
-            ValidatorError::CollectionLengthViolation {
+            ValidatorError::SequenceExpected { node, shape_expr } => format!(
+                "{}: node {} is not a sequence",
+                show_shape_expr(shape_expr, schema, width),
+                show_node(node)
+            ),
+            ValidatorError::ListLengthViolation {
                 node,
                 shape_expr,
                 length,
+                min,
+                max,
             } => format!(
-                "Collection {}: sequence {} has {length} elements",
+                "{}: sequence {} has {length} members and the expression takes {min} to {}",
                 show_shape_expr(shape_expr, schema, width),
-                show_node(node)
+                show_node(node),
+                max.map_or("*".to_string(), |m| m.to_string())
             ),
-            ValidatorError::CollectionElementFailure {
-                node, index, element, ..
+            ValidatorError::ListMemberFailure {
+                node, index, member, ..
             } => format!(
-                "Collection: element {index} ({}) of sequence {} failed",
-                show_node(element),
+                "LIST: member {index} ({}) of sequence {} failed",
+                show_node(member),
                 show_node(node)
             ),
             ValidatorError::ShapeFailed { node, idx, .. } => {
@@ -523,7 +546,8 @@ impl ValidatorError {
             | ValidatorError::ParentShapeMainShapeFailed { errors, .. }
             | ValidatorError::ParentShapeFailed { errors, .. }
             | ValidatorError::ShapeExtendsError { errors, .. }
-            | ValidatorError::CollectionElementFailure { errors, .. } => {
+            | ValidatorError::ListShapeFailure { errors, .. }
+            | ValidatorError::ListMemberFailure { errors, .. } => {
                 add_errors_to_tree(tree, errors, nodes_prefixmap, schema, width)
             },
             ValidatorError::ShapeOrError { errors, .. } => {
@@ -627,7 +651,7 @@ impl ValidatorError {
             | ValidatorError::Cancelled { .. }
             | ValidatorError::StartActFailed { .. }
             | ValidatorError::SequenceExpected { .. }
-            | ValidatorError::CollectionLengthViolation { .. } => Ok(()),
+            | ValidatorError::ListLengthViolation { .. } => Ok(()),
         }
     }
 

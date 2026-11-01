@@ -56,10 +56,24 @@ pub enum ShapeExpr {
     #[serde(rename = "ShapeExternal")]
     External,
 
-    /// rdf-array: the Collection shape expression `((shapeExpr))[min, max]`,
-    /// which matches a sequence of `min` to `max` elements, each conforming to
-    /// `shapeExpr`. Absent bounds mean 0 and unbounded; `max` is -1 for `*`.
-    Collection {
+    /// rdf-array: the LIST shape expression, `LIST ( regex )` or
+    /// `LIST card x`, which matches a sequence whose members, in order, match
+    /// the regular expression `expression`.
+    ListShape {
+        expression: Box<ListExpr>,
+    },
+
+    Ref(ShapeExprLabel),
+}
+
+/// rdf-array: the regular expression of a [`ShapeExpr::ListShape`], over
+/// shape expressions. `min` and `max` are as on triple expressions: absent
+/// means 1, and -1 is unbounded. `ListEachOf` is ordered, unlike a triple
+/// expression's `EachOf`.
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+#[serde(tag = "type")]
+pub enum ListExpr {
+    Member {
         #[serde(rename = "shapeExpr")]
         shape_expr: Box<ShapeExprWrapper>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -67,8 +81,127 @@ pub enum ShapeExpr {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<i32>,
     },
+    ListEachOf {
+        expressions: Vec<ListExpr>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<i32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<i32>,
+    },
+    ListOneOf {
+        expressions: Vec<ListExpr>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<i32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<i32>,
+    },
+}
 
-    Ref(ShapeExprLabel),
+impl ListExpr {
+    /// A member with no cardinality of its own: exactly one sequence member.
+    pub fn member(se: ShapeExpr) -> ListExpr {
+        ListExpr::Member {
+            shape_expr: Box::new(ShapeExprWrapper { se }),
+            min: None,
+            max: None,
+        }
+    }
+
+    pub fn min_max(&self) -> (Option<i32>, Option<i32>) {
+        match self {
+            ListExpr::Member { min, max, .. }
+            | ListExpr::ListEachOf { min, max, .. }
+            | ListExpr::ListOneOf { min, max, .. } => (*min, *max),
+        }
+    }
+
+    /// Sets this expression's cardinality; one that has a cardinality already,
+    /// as in `( x {2} ) {3}`, is wrapped in a `ListEachOf` of one first.
+    pub fn with_cardinality(self, new_min: Option<i32>, new_max: Option<i32>) -> ListExpr {
+        match self {
+            ListExpr::Member {
+                shape_expr,
+                min: None,
+                max: None,
+            } => ListExpr::Member {
+                shape_expr,
+                min: new_min,
+                max: new_max,
+            },
+            ListExpr::ListEachOf {
+                expressions,
+                min: None,
+                max: None,
+            } => ListExpr::ListEachOf {
+                expressions,
+                min: new_min,
+                max: new_max,
+            },
+            ListExpr::ListOneOf {
+                expressions,
+                min: None,
+                max: None,
+            } => ListExpr::ListOneOf {
+                expressions,
+                min: new_min,
+                max: new_max,
+            },
+            other => ListExpr::ListEachOf {
+                expressions: vec![other],
+                min: new_min,
+                max: new_max,
+            },
+        }
+    }
+
+    /// The shape expressions of the expression's members, in order.
+    pub fn member_shape_exprs(&self) -> Vec<&ShapeExpr> {
+        match self {
+            ListExpr::Member { shape_expr, .. } => vec![&shape_expr.se],
+            ListExpr::ListEachOf { expressions, .. } | ListExpr::ListOneOf { expressions, .. } => {
+                expressions.iter().flat_map(ListExpr::member_shape_exprs).collect()
+            },
+        }
+    }
+
+    /// The shape expressions of the expression's members, mutably, in order.
+    pub fn member_shape_exprs_mut(&mut self) -> Vec<&mut ShapeExpr> {
+        match self {
+            ListExpr::Member { shape_expr, .. } => vec![&mut shape_expr.se],
+            ListExpr::ListEachOf { expressions, .. } | ListExpr::ListOneOf { expressions, .. } => expressions
+                .iter_mut()
+                .flat_map(ListExpr::member_shape_exprs_mut)
+                .collect(),
+        }
+    }
+}
+
+impl DerefIri for ListExpr {
+    fn deref_iri(self, base: Option<&IriS>, prefixmap: Option<&PrefixMap>) -> Result<Self, DerefError> {
+        let deref_all = |expressions: Vec<ListExpr>| {
+            expressions
+                .into_iter()
+                .map(|e| e.deref_iri(base, prefixmap))
+                .collect::<Result<Vec<_>, _>>()
+        };
+        match self {
+            ListExpr::Member { shape_expr, min, max } => Ok(ListExpr::Member {
+                shape_expr: shape_expr.deref_iri(base, prefixmap)?,
+                min,
+                max,
+            }),
+            ListExpr::ListEachOf { expressions, min, max } => Ok(ListExpr::ListEachOf {
+                expressions: deref_all(expressions)?,
+                min,
+                max,
+            }),
+            ListExpr::ListOneOf { expressions, min, max } => Ok(ListExpr::ListOneOf {
+                expressions: deref_all(expressions)?,
+                min,
+                max,
+            }),
+        }
+    }
 }
 
 impl FromStr for ShapeExpr {
@@ -131,12 +264,10 @@ impl ShapeExpr {
         ShapeExpr::ShapeAnd { shape_exprs }
     }
 
-    /// rdf-array: the Collection shape expression `((se))[min, max]`.
-    pub fn collection(se: ShapeExpr, min: Option<i32>, max: Option<i32>) -> ShapeExpr {
-        ShapeExpr::Collection {
-            shape_expr: Box::new(ShapeExprWrapper { se }),
-            min,
-            max,
+    /// rdf-array: the LIST shape expression over the regular expression `expression`.
+    pub fn list_shape(expression: ListExpr) -> ShapeExpr {
+        ShapeExpr::ListShape {
+            expression: Box::new(expression),
         }
     }
 
@@ -227,10 +358,8 @@ impl DerefIri for ShapeExpr {
                 let nc = nc.deref_iri(base, prefixmap)?;
                 Ok(ShapeExpr::NodeConstraint(nc))
             },
-            ShapeExpr::Collection { shape_expr, min, max } => Ok(ShapeExpr::Collection {
-                shape_expr: shape_expr.deref_iri(base, prefixmap)?,
-                min,
-                max,
+            ShapeExpr::ListShape { expression } => Ok(ShapeExpr::ListShape {
+                expression: expression.deref_iri(base, prefixmap)?,
             }),
         }
     }
@@ -252,27 +381,39 @@ mod tests {
     }
 
     #[test]
-    fn test_serde_collection() {
-        let json = r#"{"type":"Collection","shapeExpr":{"type":"NodeConstraint","nodeKind":"iri"},"min":1,"max":-1}"#;
+    fn test_serde_list_shape() {
+        // One Member with a cardinality, which is a Collection's old shape.
+        let json = r#"{"type":"ListShape","expression":{"type":"Member","shapeExpr":{"type":"NodeConstraint","nodeKind":"iri"},"min":1,"max":-1}}"#;
         let se: ShapeExpr = serde_json::from_str(json).unwrap();
-        assert!(matches!(
-            se,
-            ShapeExpr::Collection {
-                min: Some(1),
-                max: Some(-1),
-                ..
-            }
-        ));
+        let ShapeExpr::ListShape { expression } = &se else {
+            panic!("expected a ListShape, found {se:?}");
+        };
+        assert_eq!(expression.min_max(), (Some(1), Some(-1)));
         assert_eq!(serde_json::to_string(&se).unwrap(), json);
-        let unbounded: ShapeExpr =
-            serde_json::from_str(r#"{"type":"Collection","shapeExpr":"http://a.example/T"}"#).unwrap();
-        assert!(matches!(
-            unbounded,
-            ShapeExpr::Collection {
-                min: None,
-                max: None,
-                ..
-            }
-        ));
+
+        // Nested groups, a reference as a member, and absent cardinalities.
+        let json = r#"{"type":"ListShape","expression":{"type":"ListOneOf","expressions":[{"type":"ListEachOf","expressions":[{"type":"Member","shapeExpr":"http://a.example/T"},{"type":"Member","shapeExpr":{"type":"Shape"}}],"min":0,"max":-1},{"type":"Member","shapeExpr":"http://a.example/U"}]}}"#;
+        let se: ShapeExpr = serde_json::from_str(json).unwrap();
+        assert_eq!(serde_json::to_string(&se).unwrap(), json);
+
+        assert!(
+            serde_json::from_str::<ShapeExpr>(r#"{"type":"Collection","shapeExpr":"http://a.example/T"}"#).is_err()
+        );
+    }
+
+    #[test]
+    fn list_expr_wraps_a_second_cardinality() {
+        let x = ListExpr::member(ShapeExpr::any());
+        let twice = x.with_cardinality(Some(2), Some(2));
+        assert!(matches!(twice, ListExpr::Member { min: Some(2), .. }));
+        let thrice = twice.with_cardinality(Some(3), Some(3));
+        match thrice {
+            ListExpr::ListEachOf {
+                expressions,
+                min: Some(3),
+                max: Some(3),
+            } => assert_eq!(expressions.len(), 1),
+            other => panic!("expected a ListEachOf of one, found {other:?}"),
+        }
     }
 }

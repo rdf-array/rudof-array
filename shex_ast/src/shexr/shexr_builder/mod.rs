@@ -6,9 +6,9 @@ use crate::ast::iri_exclusion::IriExclusion;
 use crate::ast::language_exclusion::LanguageExclusion;
 use crate::ast::literal_exclusion::LiteralExclusion;
 use crate::{
-    Annotation, IriRefOrWildcard, LangOrWildcard, NodeConstraint, NodeKind, NumericFacet, ObjectValue, Schema, SemAct,
-    Shape, ShapeDecl, ShapeExpr, ShapeExprLabel, ShapeExprWrapper, StringFacet, StringOrWildcard, TripleExpr,
-    TripleExprLabel, TripleExprWrapper, ValueSetValue, XsFacet,
+    Annotation, IriRefOrWildcard, LangOrWildcard, ListExpr, NodeConstraint, NodeKind, NumericFacet, ObjectValue,
+    Schema, SemAct, Shape, ShapeDecl, ShapeExpr, ShapeExprLabel, ShapeExprWrapper, StringFacet, StringOrWildcard,
+    TripleExpr, TripleExprLabel, TripleExprWrapper, ValueSetValue, XsFacet,
 };
 use prefixmap::IriRef;
 use rudof_iri::IriS;
@@ -146,28 +146,53 @@ impl<'a, RDF: BuildRDF> Ctx<'a, RDF> {
                 self.add_type(node.clone(), ShexRVocab::sx_shape_external())?;
                 Ok(node.into())
             },
-            ShapeExpr::Collection { shape_expr, min, max } => {
+            ShapeExpr::ListShape { expression } => {
                 let node = self.bnode()?;
-                self.add_type(node.clone(), ShexRVocab::sx_collection())?;
-                let inner = self.shape_expr_to_rdf(&shape_expr.se)?;
-                self.add_triple(node.clone(), ShexRVocab::sx_shape_expr(), inner)?;
-                if let Some(min) = min {
-                    self.add_triple(
-                        node.clone(),
-                        ShexRVocab::sx_min(),
-                        Object::literal(ConcreteLiteral::integer(i128::from(*min))),
-                    )?;
-                }
-                if let Some(max) = max {
-                    self.add_triple(
-                        node.clone(),
-                        ShexRVocab::sx_max(),
-                        Object::literal(ConcreteLiteral::integer(i128::from(*max))),
-                    )?;
-                }
+                self.add_type(node.clone(), ShexRVocab::sx_list_shape())?;
+                let inner = self.list_expr_to_rdf(expression)?;
+                self.add_triple(node.clone(), ShexRVocab::sx_expression(), inner)?;
                 Ok(node.into())
             },
         }
+    }
+
+    /// rdf-array: a LIST's regular expression: `sx:Member`, `sx:ListEachOf` or
+    /// `sx:ListOneOf`, with its `sx:min` and `sx:max` if it has them.
+    fn list_expr_to_rdf(&mut self, expr: &ListExpr) -> Result<RDF::Term, ShExRBuilderError> {
+        let node = self.bnode()?;
+        match expr {
+            ListExpr::Member { shape_expr, .. } => {
+                self.add_type(node.clone(), ShexRVocab::sx_member())?;
+                let inner = self.shape_expr_to_rdf(&shape_expr.se)?;
+                self.add_triple(node.clone(), ShexRVocab::sx_shape_expr(), inner)?;
+            },
+            ListExpr::ListEachOf { expressions, .. } => {
+                self.add_type(node.clone(), ShexRVocab::sx_list_each_of())?;
+                let list = self.list_to_rdf(expressions, |this, e| this.list_expr_to_rdf(e))?;
+                self.add_triple(node.clone(), ShexRVocab::sx_expressions(), list)?;
+            },
+            ListExpr::ListOneOf { expressions, .. } => {
+                self.add_type(node.clone(), ShexRVocab::sx_list_one_of())?;
+                let list = self.list_to_rdf(expressions, |this, e| this.list_expr_to_rdf(e))?;
+                self.add_triple(node.clone(), ShexRVocab::sx_expressions(), list)?;
+            },
+        }
+        let (min, max) = expr.min_max();
+        if let Some(min) = min {
+            self.add_triple(
+                node.clone(),
+                ShexRVocab::sx_min(),
+                Object::literal(ConcreteLiteral::integer(i128::from(min))),
+            )?;
+        }
+        if let Some(max) = max {
+            self.add_triple(
+                node.clone(),
+                ShexRVocab::sx_max(),
+                Object::literal(ConcreteLiteral::integer(i128::from(max))),
+            )?;
+        }
+        Ok(node.into())
     }
 
     fn shape_algebra_to_rdf(&mut self, ty: IriS, exprs: &[ShapeExprWrapper]) -> Result<RDF::Term, ShExRBuilderError> {

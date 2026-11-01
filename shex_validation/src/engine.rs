@@ -5,6 +5,7 @@ use crate::Reasons;
 use crate::ValidatorConfig;
 use crate::ValidatorErrors;
 use crate::atom;
+use crate::list_matcher::check_list_shape;
 use crate::no_match_reason::NoMatchReason;
 use crate::ref_typing::RefTyping;
 use crate::typing::{ObservableTyping, Typing, ValidationResult};
@@ -620,8 +621,8 @@ impl Engine {
                 }])),
             },
             ShapeExpr::Ref { idx } => self.prove_component(node, idx, hyp, schema, rdf),
-            ShapeExpr::Collection { expr, min, max } => check_collection(node, se, *min, *max, |element| {
-                self.prove_component(element, expr, hyp, schema, rdf)
+            ShapeExpr::ListShape { expr } => check_list_shape(node, se, expr, |member, idx| {
+                self.prove_component(member, idx, hyp, schema, rdf)
             }),
             _ => unreachable!("check_node_connective called on a non-connective shape expression"),
         }
@@ -763,8 +764,8 @@ impl Engine {
                     }])),
                 }
             },
-            ShapeExpr::Collection { expr, min, max } => check_collection(node, se, *min, *max, |element| {
-                self.check_node_constraint_expr(expr, element, schema, rdf, typing)
+            ShapeExpr::ListShape { expr } => check_list_shape(node, se, expr, |member, idx| {
+                self.check_node_constraint_expr(idx, member, schema, rdf, typing)
             }),
             ShapeExpr::NodeConstraint(nc) => {
                 // TODO: In the case of a node constraint...is the context only the subject?
@@ -1618,8 +1619,8 @@ impl Engine {
                 Ok(Either::Left(errors))
             },
             ShapeExpr::Ref { idx } => self.check_node_constraint_expr(idx, node, schema, rdf, typing),
-            ShapeExpr::Collection { expr, min, max } => check_collection(node, &se, *min, *max, |element| {
-                self.check_node_constraint_expr(expr, element, schema, rdf, typing)
+            ShapeExpr::ListShape { expr } => check_list_shape(node, &se, expr, |member, idx| {
+                self.check_node_constraint_expr(idx, member, schema, rdf, typing)
             }),
             ShapeExpr::Empty => pass(Reason::Empty { node: node.clone() }),
             ShapeExpr::External {} => self.check_node_shape_expr(cidx, node, &se, schema, rdf, typing),
@@ -2070,7 +2071,7 @@ fn extends_closure(schema: &SchemaIR, roots: &[ShapeLabelIdx]) -> Vec<ShapeLabel
 }
 
 /// Whether `se` only combines other shapes (AND/OR/NOT/reference) or is a
-/// Collection (rdf-array, whose elements are proved on demand), so it can be
+/// LIST (rdf-array, whose members are proved on demand), so it can be
 /// checked without the neighbourhood of the node.
 fn is_connective(se: &ShapeExpr) -> bool {
     matches!(
@@ -2079,55 +2080,8 @@ fn is_connective(se: &ShapeExpr) -> bool {
             | ShapeExpr::ShapeOr { .. }
             | ShapeExpr::ShapeNot { .. }
             | ShapeExpr::Ref { .. }
-            | ShapeExpr::Collection { .. }
+            | ShapeExpr::ListShape { .. }
     )
-}
-
-/// rdf-array: checks `node` against the Collection shape expression `se`,
-/// `((expr))[min, max]`: the node must be a sequence of `min` to `max`
-/// elements (`max` of `None` is unbounded), and `check_element` must pass for
-/// every element, which is a focus node of its own.
-fn check_collection(
-    node: &Node,
-    se: &ShapeExpr,
-    min: usize,
-    max: Option<usize>,
-    mut check_element: impl FnMut(&Node) -> Result<ValidationResult>,
-) -> Result<ValidationResult> {
-    let Some(elements) = node.as_object().sequence_elements() else {
-        return fail(ValidatorError::SequenceExpected {
-            shape_expr: Box::new(se.clone()),
-            node: Box::new(node.clone()),
-        });
-    };
-    let length = elements.len();
-    if length < min || max.is_some_and(|max| length > max) {
-        return fail(ValidatorError::CollectionLengthViolation {
-            shape_expr: Box::new(se.clone()),
-            node: Box::new(node.clone()),
-            length,
-        });
-    }
-    let mut reasons = Vec::new();
-    for (pos, element) in elements.iter().enumerate() {
-        let element = Node::from(element.clone());
-        match check_element(&element)? {
-            Either::Left(errors) => {
-                return fail(ValidatorError::CollectionElementFailure {
-                    node: Box::new(node.clone()),
-                    index: pos + 1,
-                    element: Box::new(element),
-                    errors: ValidatorErrors::new(errors),
-                });
-            },
-            Either::Right(rs) => reasons.extend(rs),
-        }
-    }
-    pass(Reason::Collection {
-        node: node.clone(),
-        shape_expr: se.clone(),
-        reasons: Reasons::new(reasons),
-    })
 }
 
 fn pass(reason: Reason) -> Result<ValidationResult> {
