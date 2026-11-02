@@ -356,7 +356,7 @@ fn visit_triple_expr(te: &mut TripleExpr, f: &mut impl FnMut(&mut TripleExpr) ->
 }
 
 /// rdf-array: a LIST's regular expression: `sx:Member` with `sx:shapeExpr`,
-/// `sx:ListEachOf` and `sx:ListOneOf` with `sx:expressions ( … )`, all with
+/// `sx:Undef` (an empty slot), `sx:ListEachOf` and `sx:ListOneOf` with `sx:expressions ( … )`, all with
 /// optional `sx:min` and `sx:max`.
 fn parse_list_expr<RDF: FocusRDF + 'static>(rdf: &mut RDF) -> Result<ListExpr, RDFError> {
     use rudof_rdf::rdf_core::parser::rdf_node_parser::constructors::SingleIntegerPropertyParser;
@@ -383,6 +383,7 @@ fn parse_list_expr<RDF: FocusRDF + 'static>(rdf: &mut RDF) -> Result<ListExpr, R
                 max,
             }
         },
+        Some(ShexRVocab::SX_UNDEF) => ListExpr::Undef { min, max },
         Some(ShexRVocab::SX_LIST_EACH_OF) => ListExpr::ListEachOf {
             expressions: read_list_property(rdf, ShexRVocab::sx_expressions(), parse_list_expr)?.unwrap_or_default(),
             min,

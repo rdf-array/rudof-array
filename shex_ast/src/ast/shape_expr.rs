@@ -69,13 +69,20 @@ pub enum ShapeExpr {
 /// rdf-array: the regular expression of a [`ShapeExpr::ListShape`], over
 /// shape expressions. `min` and `max` are as on triple expressions: absent
 /// means 1, and -1 is unbounded. `ListEachOf` is ordered, unlike a triple
-/// expression's `EachOf`.
+/// expression's `EachOf`. `Undef` (rdf-undef) matches an empty slot of the
+/// sequence and nothing else, and it is not a shape expression.
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(tag = "type")]
 pub enum ListExpr {
     Member {
         #[serde(rename = "shapeExpr")]
         shape_expr: Box<ShapeExprWrapper>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<i32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<i32>,
+    },
+    Undef {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         min: Option<i32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -110,6 +117,7 @@ impl ListExpr {
     pub fn min_max(&self) -> (Option<i32>, Option<i32>) {
         match self {
             ListExpr::Member { min, max, .. }
+            | ListExpr::Undef { min, max }
             | ListExpr::ListEachOf { min, max, .. }
             | ListExpr::ListOneOf { min, max, .. } => (*min, *max),
         }
@@ -125,6 +133,10 @@ impl ListExpr {
                 max: None,
             } => ListExpr::Member {
                 shape_expr,
+                min: new_min,
+                max: new_max,
+            },
+            ListExpr::Undef { min: None, max: None } => ListExpr::Undef {
                 min: new_min,
                 max: new_max,
             },
@@ -158,6 +170,7 @@ impl ListExpr {
     pub fn member_shape_exprs(&self) -> Vec<&ShapeExpr> {
         match self {
             ListExpr::Member { shape_expr, .. } => vec![&shape_expr.se],
+            ListExpr::Undef { .. } => vec![],
             ListExpr::ListEachOf { expressions, .. } | ListExpr::ListOneOf { expressions, .. } => {
                 expressions.iter().flat_map(ListExpr::member_shape_exprs).collect()
             },
@@ -168,6 +181,7 @@ impl ListExpr {
     pub fn member_shape_exprs_mut(&mut self) -> Vec<&mut ShapeExpr> {
         match self {
             ListExpr::Member { shape_expr, .. } => vec![&mut shape_expr.se],
+            ListExpr::Undef { .. } => vec![],
             ListExpr::ListEachOf { expressions, .. } | ListExpr::ListOneOf { expressions, .. } => expressions
                 .iter_mut()
                 .flat_map(ListExpr::member_shape_exprs_mut)
@@ -190,6 +204,7 @@ impl DerefIri for ListExpr {
                 min,
                 max,
             }),
+            ListExpr::Undef { min, max } => Ok(ListExpr::Undef { min, max }),
             ListExpr::ListEachOf { expressions, min, max } => Ok(ListExpr::ListEachOf {
                 expressions: deref_all(expressions)?,
                 min,

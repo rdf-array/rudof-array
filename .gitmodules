@@ -10,8 +10,8 @@
 [submodule "shex_testsuite/shexTest-contrib"]
 	path = shex_testsuite/shexTest-contrib
 	url = https://github.com/rdf-array/shexTest-contrib
-	branch = rdf-sequences
+	branch = rdf-undef
 [submodule "shacl/tests/data-shapes-contrib"]
 	path = shacl/tests/data-shapes-contrib
 	url = https://github.com/rdf-array/data-shapes-contrib
-	branch = rdf-sequences
+	branch = rdf-undef

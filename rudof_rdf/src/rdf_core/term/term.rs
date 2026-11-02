@@ -43,8 +43,8 @@ pub trait Term: Debug + Clone + Display + PartialEq + Eq + Hash {
     /// Returns the lexical representation of this term as a string.
     fn lexical_form(&self) -> String;
 
-    /// Returns the elements of this term if it is a sequence (rdf-array).
-    fn sequence_elements(&self) -> Option<Vec<Self>>;
+    /// Returns the elements of this term if it is a sequence (rdf-array), `None` at an empty slot.
+    fn sequence_elements(&self) -> Option<Vec<Option<Self>>>;
 
     /// Builds a sequence term (rdf-array) holding `elements` in order.
     fn sequence(elements: Vec<Self>) -> Self;

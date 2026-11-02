@@ -34,6 +34,7 @@ vocab_term!(ShexRVocab, SX_INF, "INF");
 // rdf-array: the LIST shape expression
 vocab_term!(ShexRVocab, SX_LIST_SHAPE, "ListShape");
 vocab_term!(ShexRVocab, SX_MEMBER, "Member");
+vocab_term!(ShexRVocab, SX_UNDEF, "Undef");
 vocab_term!(ShexRVocab, SX_LIST_EACH_OF, "ListEachOf");
 vocab_term!(ShexRVocab, SX_LIST_ONE_OF, "ListOneOf");
 

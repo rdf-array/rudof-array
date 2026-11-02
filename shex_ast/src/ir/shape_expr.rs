@@ -49,6 +49,8 @@ pub enum ListExpr {
         min: usize,
         max: Option<usize>,
     },
+    /// rdf-undef: an empty slot of the sequence
+    Undef { min: usize, max: Option<usize> },
     EachOf {
         exprs: Vec<ListExpr>,
         min: usize,
@@ -65,6 +67,7 @@ impl ListExpr {
     pub fn min_max(&self) -> (usize, Option<usize>) {
         match self {
             ListExpr::Member { min, max, .. }
+            | ListExpr::Undef { min, max }
             | ListExpr::EachOf { min, max, .. }
             | ListExpr::OneOf { min, max, .. } => (*min, *max),
         }
@@ -74,6 +77,7 @@ impl ListExpr {
     pub fn members(&self) -> Vec<ShapeLabelIdx> {
         match self {
             ListExpr::Member { expr, .. } => vec![*expr],
+            ListExpr::Undef { .. } => vec![],
             ListExpr::EachOf { exprs, .. } | ListExpr::OneOf { exprs, .. } => {
                 exprs.iter().flat_map(ListExpr::members).collect()
             },
@@ -84,7 +88,7 @@ impl ListExpr {
     /// have (`None`: unbounded).
     pub fn length_bounds(&self) -> (usize, Option<usize>) {
         let (one_min, one_max) = match self {
-            ListExpr::Member { .. } => (1, Some(1)),
+            ListExpr::Member { .. } | ListExpr::Undef { .. } => (1, Some(1)),
             ListExpr::EachOf { exprs, .. } => exprs.iter().map(ListExpr::length_bounds).fold(
                 (0usize, Some(0usize)),
                 |(acc_min, acc_max), (min, max)| {
@@ -118,6 +122,7 @@ impl ListExpr {
         };
         let (body, (min, max)) = match self {
             ListExpr::Member { expr, .. } => (show(expr), self.min_max()),
+            ListExpr::Undef { .. } => ("undef".to_string(), self.min_max()),
             ListExpr::EachOf { exprs, .. } => (junction(exprs, " ; "), self.min_max()),
             ListExpr::OneOf { exprs, .. } => (junction(exprs, " | "), self.min_max()),
         };

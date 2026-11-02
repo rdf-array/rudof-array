@@ -161,3 +161,48 @@ fn endpoints_are_rejected_on_wasm() {
         .unwrap_err();
     assert!(err.to_string().contains("not supported on wasm"), "{err}");
 }
+
+// rdf-undef: data with an empty slot parses and validates; rudof has no sh:memberShape yet, so
+// no member constraint reaches a slot, and a list of a shapes graph may not hold one.
+
+#[test]
+fn shacl_over_data_with_slots() {
+    let data = "prefix : <http://example.org/>\n:x :p ( 1 undef ) .\n";
+    let shapes = |constraint: &str| {
+        format!(
+            "prefix : <http://example.org/>\nprefix sh: <http://www.w3.org/ns/shacl#>\n:S a sh:NodeShape ; sh:targetSubjectsOf :p ; sh:property [ sh:path :p ; {constraint} ] ."
+        )
+    };
+    for (constraint, conforms) in [
+        ("sh:minCount 1", true),
+        ("sh:maxCount 0", false),
+        ("sh:nodeKind sh:IRI", false),
+    ] {
+        for mode in [ShaclValidationMode::Native, ShaclValidationMode::Sparql] {
+            let mut rudof = rudof_with_data(data);
+            rudof
+                .load_shacl_shapes()
+                .with_shacl_schema(&InputSpec::str(&shapes(constraint)))
+                .execute()
+                .unwrap();
+            rudof
+                .validate_shacl()
+                .with_shacl_validation_mode(&mode)
+                .execute()
+                .unwrap();
+            let report = rudof.shacl_validation_results().unwrap();
+            assert_eq!(report.conforms(), conforms, "{constraint} {mode:?}");
+        }
+    }
+}
+
+#[test]
+fn shacl_list_may_not_hold_a_slot() {
+    let shapes = "prefix : <http://example.org/>\nprefix sh: <http://www.w3.org/ns/shacl#>\n:S a sh:NodeShape ; sh:targetSubjectsOf :p ; sh:property [ sh:path :p ; sh:in ( 1 undef ) ] .";
+    let mut rudof = rudof_with_data("prefix : <http://example.org/>\n:x :p 1 .\n");
+    let loaded = rudof
+        .load_shacl_shapes()
+        .with_shacl_schema(&InputSpec::str(shapes))
+        .execute();
+    assert!(loaded.is_err());
+}

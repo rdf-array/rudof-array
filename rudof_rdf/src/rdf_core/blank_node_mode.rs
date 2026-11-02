@@ -91,5 +91,9 @@ fn relabel_term(term: Term, relabel: &mut impl FnMut(&BlankNode) -> BlankNode) -
 }
 
 fn relabel_sequence(seq: Sequence, relabel: &mut impl FnMut(&BlankNode) -> BlankNode) -> Sequence {
-    Sequence::new(seq.into_elements().into_iter().map(|e| relabel_term(e, relabel)))
+    Sequence::from_slots(
+        seq.into_elements()
+            .into_iter()
+            .map(|e| e.map(|e| relabel_term(e, relabel))),
+    )
 }

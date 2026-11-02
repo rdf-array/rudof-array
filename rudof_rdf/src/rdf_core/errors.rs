@@ -364,6 +364,13 @@ pub enum RDFError {
     #[error("Expected a sequence (rdf-array), but found: {node}")]
     ExpectedSequenceError { node: String },
 
+    /// rdf-undef: a list of a shapes graph or schema holds an empty slot.
+    ///
+    /// # Fields
+    /// - `node`: String representation of the sequence
+    #[error("An empty slot is not allowed in this list: {node}")]
+    SlotInListError { node: String },
+
     /// Error when attempting to convert a term to an RDF node (Object) fails.
     ///
     /// # Fields

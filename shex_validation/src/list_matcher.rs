@@ -14,7 +14,7 @@ use crate::{Reason, Reasons, ValidatorErrors};
 use either::Either;
 use shex_ast::ir::shape_expr::{ListExpr, ShapeExpr};
 use shex_ast::{Node, ShapeLabelIdx};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 type Result<T> = std::result::Result<T, ValidatorError>;
 
@@ -22,20 +22,24 @@ type Result<T> = std::result::Result<T, ValidatorError>;
 /// (`None`: no member taken yet).
 type Positions = BTreeMap<usize, Option<usize>>;
 
-/// One member taken: its position, the shape it passed, the step before it.
+/// One member taken: its position, the shape it passed (`None`: an empty slot,
+/// taken by `undef`), the step before it.
 struct Step {
     pos: usize,
-    idx: ShapeLabelIdx,
+    idx: Option<ShapeLabelIdx>,
     previous: Option<usize>,
 }
 
 struct Matcher<'a, F> {
-    members: &'a [Node],
+    /// `None` at an empty slot
+    members: &'a [Option<Node>],
     check_member: F,
     /// The result of every `(position, shape)` tried.
     tested: HashMap<(usize, ShapeLabelIdx), ValidationResult>,
     /// The order the pairs were tried in, for the report of a failure.
     tried: Vec<(usize, ShapeLabelIdx)>,
+    /// The empty slots that `undef` took.
+    slots_taken: BTreeSet<usize>,
     steps: Vec<Step>,
 }
 
@@ -47,7 +51,11 @@ where
         if let Some(result) = self.tested.get(&(pos, idx)) {
             return Ok(result.is_right());
         }
-        let result = (self.check_member)(&self.members[pos], &idx)?;
+        // rdf-undef: a slot satisfies no member constraint, `.` included; only `undef` matches one.
+        let result = match &self.members[pos] {
+            Some(member) => (self.check_member)(member, &idx)?,
+            None => Either::Left(Vec::new()),
+        };
         let passed = result.is_right();
         self.tested.insert((pos, idx), result);
         self.tried.push((pos, idx));
@@ -95,7 +103,23 @@ where
                         let step = self.steps.len();
                         self.steps.push(Step {
                             pos: *pos,
-                            idx: *idx,
+                            idx: Some(*idx),
+                            previous: *previous,
+                        });
+                        result.entry(pos + 1).or_insert(Some(step));
+                    }
+                }
+                Ok(result)
+            },
+            ListExpr::Undef { .. } => {
+                let mut result = Positions::new();
+                for (pos, previous) in starts {
+                    if self.members.get(*pos).is_some_and(Option::is_none) {
+                        self.slots_taken.insert(*pos);
+                        let step = self.steps.len();
+                        self.steps.push(Step {
+                            pos: *pos,
+                            idx: None,
                             previous: *previous,
                         });
                         result.entry(pos + 1).or_insert(Some(step));
@@ -130,7 +154,9 @@ where
         let mut path = Vec::new();
         while let Some(step) = last {
             let step = &self.steps[step];
-            path.push((step.pos, step.idx));
+            if let Some(idx) = step.idx {
+                path.push((step.pos, idx));
+            }
             last = step.previous;
         }
         path.into_iter()
@@ -152,6 +178,9 @@ where
                 Some(Either::Left(errors)) => failing.entry(key.0).or_default().extend(errors.iter().cloned()),
                 None => {},
             }
+        }
+        for pos in &self.slots_taken {
+            passed[*pos] = true;
         }
         failing.into_iter().find(|(pos, _)| !passed[*pos])
     }
@@ -180,12 +209,13 @@ pub(crate) fn check_list_shape(
             node: Box::new(node.clone()),
         });
     };
-    let members: Vec<Node> = elements.iter().cloned().map(Node::from).collect();
+    let members: Vec<Option<Node>> = elements.iter().map(|e| e.clone().map(Node::from)).collect();
     let mut matcher = Matcher {
         members: &members,
         check_member,
         tested: HashMap::new(),
         tried: Vec::new(),
+        slots_taken: BTreeSet::new(),
         steps: Vec::new(),
     };
     let ends = matcher.ends(expr, &Positions::from([(0, None)]))?;
@@ -197,11 +227,17 @@ pub(crate) fn check_list_shape(
         }]));
     }
     match matcher.first_failure() {
-        Some((pos, errors)) => failure(ValidatorError::ListMemberFailure {
-            node: Box::new(node.clone()),
-            index: pos + 1,
-            member: Box::new(members[pos].clone()),
-            errors: ValidatorErrors::new(errors),
+        Some((pos, errors)) => failure(match &members[pos] {
+            Some(member) => ValidatorError::ListMemberFailure {
+                node: Box::new(node.clone()),
+                index: pos + 1,
+                member: Box::new(member.clone()),
+                errors: ValidatorErrors::new(errors),
+            },
+            None => ValidatorError::ListSlotFailure {
+                node: Box::new(node.clone()),
+                index: pos + 1,
+            },
         }),
         None => {
             let (min, max) = expr.length_bounds();

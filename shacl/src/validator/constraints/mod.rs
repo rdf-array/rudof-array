@@ -443,7 +443,13 @@ pub(crate) fn object_as_sparql(object: &Object) -> Option<String> {
         Object::Triple { .. } => None,
         // rdf-array: SPARQL-array spells a sequence `( e1 e2 )`
         Object::Sequence(elements) => {
-            let parts = elements.iter().map(object_as_sparql).collect::<Option<Vec<_>>>()?;
+            let parts = elements
+                .iter()
+                .map(|e| match e {
+                    Some(e) => object_as_sparql(e),
+                    None => Some("undef".to_string()),
+                })
+                .collect::<Option<Vec<_>>>()?;
             Some(format!("( {} )", parts.join(" ")))
         },
     }

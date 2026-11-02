@@ -360,6 +360,10 @@ where
                 .append(self.doc.text(list_cardinality(*min, *max)))
                 .append(self.doc.text(" "))
                 .append(self.pp_list_atom(&shape_expr.se)),
+            ListExpr::Undef { min, max } if min.is_some() || max.is_some() => self
+                .keyword("LIST ")
+                .append(self.doc.text(list_cardinality(*min, *max)))
+                .append(self.doc.text(" undef")),
             _ => self
                 .keyword("LIST ( ")
                 .append(self.pp_list_expr(expression, 0))
@@ -376,6 +380,7 @@ where
         let has_cardinality = min.is_some() || max.is_some();
         let body = match expression {
             ListExpr::Member { shape_expr, .. } => self.pp_list_member(&shape_expr.se),
+            ListExpr::Undef { .. } => self.doc.text("undef"),
             ListExpr::ListEachOf { expressions, .. } => {
                 self.pp_list_group(expressions, 2, " ; ", has_cardinality || parent_prec >= 2)
             },

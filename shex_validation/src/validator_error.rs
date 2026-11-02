@@ -205,6 +205,11 @@ pub enum ValidatorError {
         errors: ValidatorErrors,
     },
 
+    /// rdf-undef: a position of a sequence is an empty slot, which satisfies no
+    /// member constraint.
+    #[error("LIST error: position {index} of the sequence {node} is an empty slot, which no member constraint accepts")]
+    ListSlotFailure { node: Box<Node>, index: usize },
+
     /// rdf-array: a LIST shape expression was checked against a node that is
     /// not a sequence.
     #[error("LIST error: node {node} is not a sequence, as {shape_expr} requires")]
@@ -342,6 +347,9 @@ impl ValidatorError {
                 show_shape_expr(shape_expr, schema, width),
                 show_node(node)
             ),
+            ValidatorError::ListSlotFailure { node, index } => {
+                format!("{}: position {index} is an empty slot", show_node(node))
+            },
             ValidatorError::SequenceExpected { node, shape_expr } => format!(
                 "{}: node {} is not a sequence",
                 show_shape_expr(shape_expr, schema, width),
@@ -651,6 +659,7 @@ impl ValidatorError {
             | ValidatorError::Cancelled { .. }
             | ValidatorError::StartActFailed { .. }
             | ValidatorError::SequenceExpected { .. }
+            | ValidatorError::ListSlotFailure { .. }
             | ValidatorError::ListLengthViolation { .. } => Ok(()),
         }
     }

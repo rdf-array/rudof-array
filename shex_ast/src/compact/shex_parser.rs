@@ -465,6 +465,29 @@ mod tests {
         ] {
             assert!(list_value(good).is_ok(), "{good} should parse: {:?}", list_value(good));
         }
+        // rdf-undef: undef in place of a member, in any case; it is not a shape expression
+        assert_eq!(list_json("LIST * undef"), r#"{"Undef","min":0,"max":-1}"#);
+        assert_eq!(
+            list_json("LIST ( IRI | UNDEF )"),
+            r#"{"ListOneOf","expressions":[{"Member","shapeExpr":IRI},{"Undef"}]}"#
+        );
+        for bad in [
+            "LIST ( undef OR IRI )",
+            "LIST ( IRI OR undef )",
+            "LIST ( NOT undef )",
+            "LIST undef",
+            "undef",
+        ] {
+            assert!(list_value(bad).is_err(), "{bad} should not parse");
+        }
+        assert!(
+            ShExParser::parse(
+                "PREFIX undef: <http://a.example/>\n<S> LIST ( undef:x ; undef )",
+                None,
+                &iri!("http://default/")
+            )
+            .is_ok()
+        );
         // `list:x` is still a prefixed name, not the keyword
         assert!(matches!(list_value("list:x").unwrap(), ShapeExpr::NodeConstraint(_)));
 

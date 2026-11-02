@@ -393,14 +393,14 @@ codegen-units = 1
 # rdf-array: the Oxigraph crates come from oxigraph-array, which adds the
 # sequence term (oxrdf::Sequence) to the data model, the syntaxes and SPARQL.
 [patch.crates-io]
-oxigraph = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-oxjsonld = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-oxrdf = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-oxrdfio = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-oxrdfxml = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-oxsdatatypes = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-oxttl = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-sparesults = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-spareval = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-spargebra = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
-sparopt = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-sequences" }
+oxigraph = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+oxjsonld = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+oxrdf = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+oxrdfio = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+oxrdfxml = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+oxsdatatypes = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+oxttl = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+sparesults = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+spareval = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+spargebra = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }
+sparopt = { git = "https://github.com/rdf-array/oxigraph-array", branch = "rdf-undef" }

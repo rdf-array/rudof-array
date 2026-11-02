@@ -16,9 +16,9 @@ use lazy_regex::{Lazy, regex};
 use nom::{
     Err, Input, Parser,
     branch::alt,
-    bytes::complete::{tag, take_while, take_while1},
+    bytes::complete::{tag, tag_no_case, take_while, take_while1},
     character::complete::{alpha1, alphanumeric1, char, digit0, digit1, none_of, one_of, satisfy},
-    combinator::{cut, map, map_res, opt, recognize},
+    combinator::{cut, map, map_res, not, opt, recognize},
     error::ErrorKind,
     error_position,
     multi::{count, fold_many0, many0, many1},
@@ -394,8 +394,18 @@ fn list_shape_regex(i: Span) -> IRes<ListExpr> {
 fn list_shape_cardinality(i: Span) -> IRes<ListExpr> {
     let (i, (min, max)) = list_cardinality(i)?;
     let (i, _) = tws0(i)?;
-    let (i, se) = cut(inline_shape_atom()).parse(i)?;
-    Ok((i, ListExpr::member(se).with_cardinality(min, max)))
+    let (i, expression) = alt((list_undef, map(cut(inline_shape_atom()), ListExpr::member))).parse(i)?;
+    Ok((i, expression.with_cardinality(min, max)))
+}
+
+/// rdf-undef: `undef` in place of a member, in any case. `undef:x` stays a prefixed name.
+fn list_undef(i: Span) -> IRes<ListExpr> {
+    let (i, _) = tag_no_case("undef").parse(i)?;
+    let (i, _) = not(satisfy(|c| {
+        c.is_alphanumeric() || matches!(c, '_' | '-' | ':' | '.' | '%' | '\\')
+    }))
+    .parse(i)?;
+    Ok((i, ListExpr::Undef { min: None, max: None }))
 }
 
 /// A `LIST` cardinality; a minimum above the maximum is rejected.
@@ -466,12 +476,12 @@ fn list_unary(i: Span) -> IRes<ListExpr> {
     }
 }
 
-/// `listMember ::= listMemberOr | '(' listOneOf ')'`: inside `LIST ( )`, `(`
+/// `listMember ::= listMemberOr | 'undef' | '(' listOneOf ')'`: inside `LIST ( )`, `(`
 /// opens a group, so a member's first atom is never parenthesised.
 fn list_member(i: Span) -> IRes<ListExpr> {
     let (i, _) = tws0(i)?;
     map_error(
-        |i| alt((list_group, map(list_member_or, ListExpr::member))).parse(i),
+        |i| alt((list_group, list_undef, map(list_member_or, ListExpr::member))).parse(i),
         || ShExParseError::ExpectedListMember,
     )(i)
 }

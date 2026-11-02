@@ -13,8 +13,8 @@ pub enum ShExRError {
         err: RDFError,
     },
 
-    /// rdf-array: a LIST's expression must be a Member, ListEachOf or ListOneOf.
-    #[error("Node {node} should be an sx:Member, sx:ListEachOf or sx:ListOneOf, but its type is {found:?}")]
+    /// rdf-array: a LIST's expression must be a Member, Undef, ListEachOf or ListOneOf.
+    #[error("Node {node} should be an sx:Member, sx:Undef, sx:ListEachOf or sx:ListOneOf, but its type is {found:?}")]
     UnexpectedListExprType { node: String, found: Option<String> },
 
     #[error("No nodes with `rdf:type sx:Schema`")]

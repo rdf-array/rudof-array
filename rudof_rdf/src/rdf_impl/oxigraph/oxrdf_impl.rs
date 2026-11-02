@@ -102,7 +102,7 @@ impl Term for OxTerm {
         }
     }
 
-    fn sequence_elements(&self) -> Option<Vec<Self>> {
+    fn sequence_elements(&self) -> Option<Vec<Option<Self>>> {
         match self {
             OxTerm::Sequence(seq) => Some(seq.elements().to_vec()),
             _ => None,

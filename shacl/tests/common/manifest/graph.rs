@@ -69,7 +69,11 @@ impl ManifestGraph {
     /// rdf-array: a list (`mf:entries ( … )`) is one sequence term.
     pub fn list(&self, head: Term) -> Result<Vec<Term>, TestSuiteError> {
         match head {
-            Term::Sequence(seq) => Ok(seq.into_elements()),
+            Term::Sequence(seq) => seq
+                .into_elements()
+                .into_iter()
+                .map(|e| e.ok_or_else(|| TestSuiteError::Validation("an empty slot in a manifest list".to_string())))
+                .collect(),
             other => Err(TestSuiteError::Validation(format!("{other} is not a sequence"))),
         }
     }

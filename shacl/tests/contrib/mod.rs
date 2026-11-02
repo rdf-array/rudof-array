@@ -14,6 +14,10 @@ mod path {
         ladder_path_002 => "ladder-path-002",
         #[ignore = "rdf-array: expects sht:Failure, and rudof-array accepts sh:path (), an empty sequence path"]
         empty_path_001 => "empty-path-001",
+        #[ignore = "rdf-array: the runner does not read sht:Failure expectations (an ill-formed shapes graph); bin/build.py in data-shapes-contrib checks that rudof-array refuses it"]
+        undef_path_sequence_001 => "undef-path-sequence-001",
+        #[ignore = "rdf-array: the runner does not read sht:Failure expectations (an ill-formed shapes graph); bin/build.py in data-shapes-contrib checks that rudof-array refuses it"]
+        undef_path_alternative_001 => "undef-path-alternative-001",
     }
 }
 
@@ -32,6 +36,13 @@ mod node {
         in_empty_001 => "in-empty-001",
         #[ignore = "rdf-array: rudof has no SHACL 1.2 list constraints (sh:memberShape, sh:minListLength, sh:maxListLength, sh:uniqueMembers) yet"]
         xone_empty_001 => "xone-empty-001",
+        undef_value_nodekind_001 => "undef-value-nodeKind-001",
+        #[ignore = "rdf-array: the runner does not read sht:Failure expectations (an ill-formed shapes graph); bin/build.py in data-shapes-contrib checks that rudof-array refuses it"]
+        undef_in_001 => "undef-in-001",
+        #[ignore = "rdf-array: the runner does not read sht:Failure expectations (an ill-formed shapes graph); bin/build.py in data-shapes-contrib checks that rudof-array refuses it"]
+        undef_or_001 => "undef-or-001",
+        #[ignore = "rdf-array: the runner does not read sht:Failure expectations (an ill-formed shapes graph); bin/build.py in data-shapes-contrib checks that rudof-array refuses it"]
+        undef_ignored_properties_001 => "undef-ignoredProperties-001",
     }
 }
 
@@ -58,5 +69,15 @@ mod list {
         polygon_001 => "polygon-001",
         #[ignore = "rdf-array: rudof has no SHACL 1.2 list constraints (sh:memberShape, sh:minListLength, sh:maxListLength, sh:uniqueMembers) yet"]
         playlist_001 => "playlist-001",
+        #[ignore = "rdf-array: rudof has no SHACL 1.2 list constraints (sh:memberShape, sh:minListLength, sh:maxListLength, sh:uniqueMembers)"]
+        undef_membershape_property_001 => "undef-memberShape-property-001",
+        #[ignore = "rdf-array: rudof has no SHACL 1.2 list constraints (sh:memberShape, sh:minListLength, sh:maxListLength, sh:uniqueMembers)"]
+        undef_membershape_any_001 => "undef-memberShape-any-001",
+        #[ignore = "rdf-array: rudof has no SHACL 1.2 list constraints (sh:memberShape, sh:minListLength, sh:maxListLength, sh:uniqueMembers)"]
+        undef_membershape_nested_001 => "undef-memberShape-nested-001",
+        #[ignore = "rdf-array: rudof has no SHACL 1.2 list constraints (sh:memberShape, sh:minListLength, sh:maxListLength, sh:uniqueMembers)"]
+        undef_listlength_001 => "undef-listLength-001",
+        #[ignore = "rdf-array: rudof has no SHACL 1.2 list constraints (sh:memberShape, sh:minListLength, sh:maxListLength, sh:uniqueMembers)"]
+        undef_uniquemembers_001 => "undef-uniqueMembers-001",
     }
 }

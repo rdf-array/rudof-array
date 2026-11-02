@@ -156,7 +156,7 @@ impl<'a, RDF: BuildRDF> Ctx<'a, RDF> {
         }
     }
 
-    /// rdf-array: a LIST's regular expression: `sx:Member`, `sx:ListEachOf` or
+    /// rdf-array: a LIST's regular expression: `sx:Member`, `sx:Undef`, `sx:ListEachOf` or
     /// `sx:ListOneOf`, with its `sx:min` and `sx:max` if it has them.
     fn list_expr_to_rdf(&mut self, expr: &ListExpr) -> Result<RDF::Term, ShExRBuilderError> {
         let node = self.bnode()?;
@@ -165,6 +165,9 @@ impl<'a, RDF: BuildRDF> Ctx<'a, RDF> {
                 self.add_type(node.clone(), ShexRVocab::sx_member())?;
                 let inner = self.shape_expr_to_rdf(&shape_expr.se)?;
                 self.add_triple(node.clone(), ShexRVocab::sx_shape_expr(), inner)?;
+            },
+            ListExpr::Undef { .. } => {
+                self.add_type(node.clone(), ShexRVocab::sx_undef())?;
             },
             ListExpr::ListEachOf { expressions, .. } => {
                 self.add_type(node.clone(), ShexRVocab::sx_list_each_of())?;

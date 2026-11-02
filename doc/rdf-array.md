@@ -222,6 +222,28 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
   passes `:red :rgb (255 0 0)`, and reports `(255 192)` by its length and `(0 0 256)` by its third
   member).
 
+## rdf-undef
+
+Branch `rdf-undef`, from `rdf-sequences`: the empty slot of [rdf-undef.md](https://rdf-array.github.io/rdf-array/docs/rdf-undef.html),
+`( 1 undef 3 )`. The term, the syntaxes and SPARQL come from oxigraph-array's `rdf-undef`; `[patch.crates-io]` follows that branch
+and `Cargo.lock` holds its commit, edited by hand.
+
+- **Term.** `Object::Sequence` holds `Vec<Option<Object>>` and `Term::sequence_elements` gives `Option`s, `None` at a slot; shown as
+  `undef`, and a slot orders before every term. `Object` has no new variant, so a slot cannot be a subject or an object.
+- **ShEx.** A slot satisfies no member constraint, `.` and `NOT` included: `( 1 undef 3 )` fails `LIST {3} xsd:integer` and `LIST * .`,
+  with `ValidatorError::ListSlotFailure` naming the position. `undef` in place of a member matches a slot and nothing else:
+  `LIST ( ( xsd:integer | undef ) * )`, `LIST * undef`. It is `ListExpr::Undef` in the AST and the IR, `{ "type": "Undef" }` in ShExJ and
+  `sx:Undef` in ShExR, and it takes no `AND`, `OR` or `NOT`. A slot counts in the length, and a sequence holding one still satisfies
+  `.` as a whole value.
+- **SHACL.** Data with slots parses and validates. rudof has no `sh:memberShape` (SHACL 1.2's list components are still to do), so the
+  rule that a slot conforms to no member shape has nothing to act on yet. A list of a shapes graph may not hold one: `sh:in ( 1 undef )`,
+  `sh:or`, a sequence or alternative path, `sh:ignoredProperties` and a list node expression are `RDFError::SlotInListError`.
+- **Tests.** The `shexTest-contrib` and `data-shapes-contrib` submodules are on their `rdf-undef` branches. `shacl/tests/contrib`: the `undef-*`
+  tests that need list constraints or `sht:Failure` are flagged, as those without slots are.
+  `cargo test --workspace`: 1482 passed, 0 failed, 53 ignored (1475, 0, 43 on `rdf-sequences`); clippy and fmt clean.
+- **Not done, from `rdf-sequences`:** `sh:in` or `sh:hasValue` naming a sequence as a value, with or without a slot, reaches `todo!()` in
+  `shacl/src/rdf/parsers/utils.rs`.
+
 ## Decisions
 
 - **The subject type.** As in oxigraph-array, a triple's subject is `oxrdf::Subject` (IRI, blank

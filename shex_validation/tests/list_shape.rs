@@ -217,3 +217,48 @@ fn failures_name_the_member_or_the_length() {
     assert!(text.contains("is not a sequence"), "{text}");
     assert!(validate(colour, ":x :p ( 1 2 3 ) .").0);
 }
+
+// rdf-undef: a slot satisfies no member constraint (rdf-undef.md §5), and undef matches one
+
+#[test]
+fn slot_satisfies_no_member_constraint() {
+    assert!(conforms("LIST {3} xsd:integer", "( 1 2 3 )"));
+    assert!(!conforms("LIST {3} xsd:integer", "( 1 undef 3 )"));
+    assert!(!conforms("LIST * .", "( undef )"));
+    assert!(!conforms("LIST * IRI", "( undef )"));
+    assert!(!conforms("LIST ( xsd:integer ; xsd:integer )", "( 1 undef )"));
+    assert!(!conforms("LIST ( xsd:integer | IRI ) *", "( 1 undef )"));
+    assert!(conforms("LIST * .", "()"));
+}
+
+#[test]
+fn slot_counts_and_is_reported() {
+    // Data with a slot parses, and a sequence with one is still a sequence value
+    let (ok, _) = validate(":S { :p . }", ":x :p ( 1 undef ) .");
+    assert!(ok);
+    let (ok, report) = validate(":S { :p LIST {2} xsd:integer }", ":x :p ( undef 1 ) .");
+    assert!(!ok);
+    assert!(
+        report.contains("empty slot") || report.contains("ListSlotFailure"),
+        "{report}"
+    );
+    let (ok, _) = validate(":S { :p LIST {3} xsd:integer }", ":x :p ( 1 undef ) .");
+    assert!(!ok);
+}
+
+#[test]
+fn nested_slot_fails_at_its_depth() {
+    assert!(!conforms("LIST {2} LIST {2} xsd:integer", "( ( 1 2 ) ( 3 undef ) )"));
+    assert!(conforms("LIST {2} LIST {2} xsd:integer", "( ( 1 2 ) ( 3 4 ) )"));
+}
+
+#[test]
+fn undef_matches_a_slot_and_nothing_else() {
+    assert!(conforms("LIST ( ( xsd:integer | undef ) * )", "( 1 undef 3 )"));
+    assert!(conforms("LIST ( ( xsd:integer | undef ) * )", "( 1 2 )"));
+    assert!(conforms("LIST ( undef {2} )", "( undef undef )"));
+    assert!(conforms("LIST * undef", "( )"));
+    assert!(!conforms("LIST ( undef {2} )", "( undef )"));
+    assert!(!conforms("LIST ( xsd:integer ; undef )", "( 1 2 )"));
+    assert!(!conforms("LIST * undef", "( undef 1 )"));
+}

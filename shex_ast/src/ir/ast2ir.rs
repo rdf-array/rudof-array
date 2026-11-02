@@ -870,6 +870,7 @@ impl AST2IR {
                     max,
                 })
             },
+            ast::ListExpr::Undef { .. } => Ok(ListExpr::Undef { min, max }),
             ast::ListExpr::ListEachOf { expressions, .. } => {
                 let mut exprs = Vec::with_capacity(expressions.len());
                 for e in expressions {

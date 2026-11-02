@@ -74,7 +74,14 @@ pub(crate) fn node_expr_from_term<RDF: FocusRDF>(term: &RDF::Term, rdf: &mut RDF
         Object::BlankNode(_) => blank_node_expr(term, rdf),
         Object::Triple { .. } => todo!("Triple term expressions are not supported yet"),
         // rdf-array: a list node expression is one sequence term
-        Object::Sequence(members) => Ok(ASTNodeExpr::List(members)),
+        Object::Sequence(members) => {
+            let seq = term.to_string();
+            let members = members
+                .into_iter()
+                .map(|m| m.ok_or_else(|| RDFError::SlotInListError { node: seq.clone() }))
+                .collect::<Result<_, _>>()?;
+            Ok(ASTNodeExpr::List(members))
+        },
     }
 }
 

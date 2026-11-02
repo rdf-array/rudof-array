@@ -203,7 +203,8 @@ pub enum Object {
     },
     /// An rdf-array sequence: one term holding its elements in order.
     /// `()` is the empty sequence, which is not `rdf:nil`.
-    Sequence(Vec<Object>),
+    /// rdf-undef: `None` is an empty slot, a position with no value.
+    Sequence(Vec<Option<Object>>),
 }
 
 /// ## Constructors methods
@@ -245,7 +246,7 @@ impl Object {
     /// # Parameters
     /// - `elements`: The elements of the sequence, in order
     pub fn sequence(elements: Vec<Object>) -> Object {
-        Object::Sequence(elements)
+        Object::Sequence(elements.into_iter().map(Some).collect())
     }
 
     /// Creates a boolean literal object.
@@ -275,12 +276,12 @@ impl Object {
                 predicate,
                 object,
             } => subject.as_ref().length() + predicate.as_str().len() + object.as_ref().length(),
-            Object::Sequence(elements) => elements.iter().map(Object::length).sum(),
+            Object::Sequence(elements) => elements.iter().flatten().map(Object::length).sum(),
         }
     }
 
-    /// Returns the elements if this object is a sequence (rdf-array).
-    pub fn sequence_elements(&self) -> Option<&[Object]> {
+    /// Returns the elements if this object is a sequence (rdf-array), `None` at an empty slot.
+    pub fn sequence_elements(&self) -> Option<&[Option<Object>]> {
         match self {
             Object::Sequence(elements) => Some(elements),
             _ => None,
@@ -388,17 +389,24 @@ pub fn show_ox_sequence(seq: &oxrdf::Sequence, show: impl Fn(&oxrdf::Term) -> St
     if seq.is_empty() {
         "()".to_string()
     } else {
-        let parts: Vec<String> = seq.elements().iter().map(show).collect();
+        let parts: Vec<String> = seq
+            .elements()
+            .iter()
+            .map(|e| e.as_ref().map_or_else(|| "undef".to_string(), &show))
+            .collect();
         format!("( {} )", parts.join(" "))
     }
 }
 
 /// Spells a sequence `( e1 e2 )`, or `()` when it is empty, as Turtle does.
-fn show_sequence(elements: &[Object], show: impl Fn(&Object) -> String) -> String {
+fn show_sequence(elements: &[Option<Object>], show: impl Fn(&Object) -> String) -> String {
     if elements.is_empty() {
         "()".to_string()
     } else {
-        let parts: Vec<String> = elements.iter().map(show).collect();
+        let parts: Vec<String> = elements
+            .iter()
+            .map(|e| e.as_ref().map_or_else(|| "undef".to_string(), &show))
+            .collect();
         format!("( {} )", parts.join(" "))
     }
 }
@@ -445,7 +453,9 @@ impl From<Object> for oxrdf::Term {
                 let object: oxrdf::Term = (*object).into();
                 oxrdf::Triple::new(subject, predicate, object).into()
             },
-            Object::Sequence(elements) => oxrdf::Sequence::new(elements.into_iter().map(oxrdf::Term::from)).into(),
+            Object::Sequence(elements) => {
+                oxrdf::Sequence::from_slots(elements.into_iter().map(|e| e.map(oxrdf::Term::from))).into()
+            },
         }
     }
 }
@@ -481,7 +491,7 @@ impl TryFrom<oxrdf::Term> for Object {
             oxrdf::Term::Sequence(seq) => Ok(Object::Sequence(
                 seq.into_elements()
                     .into_iter()
-                    .map(Object::try_from)
+                    .map(|e| e.map(Object::try_from).transpose())
                     .collect::<Result<_, _>>()?,
             )),
         }
@@ -532,7 +542,9 @@ impl TryFrom<Object> for oxrdf::Subject {
 
     fn try_from(value: Object) -> Result<Self, Self::Error> {
         match value {
-            Object::Sequence(elements) => Ok(oxrdf::Sequence::new(elements.into_iter().map(oxrdf::Term::from)).into()),
+            Object::Sequence(elements) => {
+                Ok(oxrdf::Sequence::from_slots(elements.into_iter().map(|e| e.map(oxrdf::Term::from))).into())
+            },
             other => oxrdf::NamedOrBlankNode::try_from(other).map(oxrdf::Subject::from),
         }
     }
@@ -586,7 +598,10 @@ impl Display for Object {
                     if i > 0 {
                         write!(f, " ")?;
                     }
-                    write!(f, "{e}")?;
+                    match e {
+                        Some(e) => write!(f, "{e}")?,
+                        None => write!(f, "undef")?,
+                    }
                 }
                 write!(f, ")")
             },
@@ -636,7 +651,8 @@ impl PartialOrd for Object {
             (Object::BlankNode(a), Object::BlankNode(b)) => Some(a.cmp(b)),
             (Object::Literal(a), Object::Literal(b)) => a.partial_cmp(b),
             // rdf-array: sequences come after every other kind of term and
-            // compare element by element, a prefix first.
+            // compare element by element, a prefix first; rdf-undef: a slot
+            // before every term, as None is.
             (Object::Sequence(a), Object::Sequence(b)) => {
                 for (x, y) in a.iter().zip(b.iter()) {
                     match x.partial_cmp(y)? {

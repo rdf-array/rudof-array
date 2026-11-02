@@ -299,7 +299,8 @@ where
 /// # Errors
 ///
 /// `RDFError::NoFocusNodeError` without a focus node, and
-/// `RDFError::ExpectedSequenceError` when the focus node is not a sequence.
+/// `RDFError::ExpectedSequenceError` when the focus node is not a sequence, and
+/// `RDFError::SlotInListError` when it holds an empty slot, which no list of a shapes graph may.
 pub fn parse_sequence<RDF>(rdf: &mut RDF) -> Result<Vec<RDF::Term>, RDFError>
 where
     RDF: FocusRDF,
@@ -309,5 +310,12 @@ where
         .sequence_elements()
         .ok_or_else(|| RDFError::ExpectedSequenceError {
             node: focus.to_string(),
+        })?
+        .into_iter()
+        .map(|e| {
+            e.ok_or_else(|| RDFError::SlotInListError {
+                node: focus.to_string(),
+            })
         })
+        .collect()
 }
